@@ -1,0 +1,105 @@
+- generic [ref=f1e3]:
+  - navigation [ref=f1e4]:
+    - generic [ref=f1e5]:
+      - link "SkillBridge Africa" [ref=f1e6] [cursor=pointer]:
+        - /url: /
+        - img [ref=f1e7]
+        - generic [ref=f1e12]: SkillBridge Africa
+      - generic [ref=f1e13]:
+        - link "Talent" [ref=f1e14] [cursor=pointer]:
+          - /url: /talent
+        - link "Projects" [ref=f1e15] [cursor=pointer]:
+          - /url: /projects
+        - link "Jobs" [ref=f1e16] [cursor=pointer]:
+          - /url: /jobs
+        - link "Tutor" [ref=f1e17] [cursor=pointer]:
+          - /url: /tutor
+        - link "Programs" [ref=f1e18] [cursor=pointer]:
+          - /url: /#programs
+        - button "Sign In" [ref=f1e19]
+  - main [ref=f1e20]:
+    - generic [ref=f1e22]:
+      - generic [ref=f1e24]:
+        - img [ref=f1e25]
+        - generic [ref=f1e30]: SkillBridge Africa
+      - generic [ref=f1e31]:
+        - tablist [ref=f1e32]:
+          - tab "Sign In" [selected] [ref=f1e33]
+          - tab "Sign Up" [ref=f1e34]
+        - tabpanel "Sign In" [ref=f1e35]:
+          - generic [ref=f1e36]:
+            - generic [ref=f1e37]:
+              - generic [ref=f1e38]: Welcome Back
+              - generic [ref=f1e39]: Sign in to access the marketplace.
+            - generic [ref=f1e40]:
+              - generic [ref=f1e41]:
+                - generic [ref=f1e42]:
+                  - generic [ref=f1e43]: Email
+                  - generic [ref=f1e44]:
+                    - img [ref=f1e45]
+                    - textbox "Email" [ref=f1e48]:
+                      - /placeholder: name@example.com
+                - generic [ref=f1e49]:
+                  - generic [ref=f1e50]: Password
+                  - generic [ref=f1e51]:
+                    - img [ref=f1e52]
+                    - textbox "Password" [ref=f1e55]:
+                      - /placeholder: ••••••••
+              - button "Sign In" [ref=f1e57]
+  - contentinfo [ref=f1e58]:
+    - generic [ref=f1e59]:
+      - generic [ref=f1e60]:
+        - generic [ref=f1e61]:
+          - generic [ref=f1e62]:
+            - img [ref=f1e63]
+            - generic [ref=f1e68]: SkillBridge Africa
+          - paragraph [ref=f1e69]: Empowering the next generation of African tech talent through intensive bridging programs and mentorship.
+          - generic [ref=f1e70]:
+            - link [ref=f1e71] [cursor=pointer]:
+              - /url: "#"
+              - img [ref=f1e72]
+            - link [ref=f1e74] [cursor=pointer]:
+              - /url: "#"
+              - img [ref=f1e75]
+            - link [ref=f1e79] [cursor=pointer]:
+              - /url: "#"
+              - img [ref=f1e80]
+        - generic [ref=f1e83]:
+          - heading "Programs" [level=3] [ref=f1e84]
+          - list [ref=f1e85]:
+            - listitem [ref=f1e86]:
+              - link "Web Development" [ref=f1e87] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=f1e88]:
+              - link "Data Science" [ref=f1e89] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=f1e90]:
+              - link "UI/UX Design" [ref=f1e91] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=f1e92]:
+              - link "Cloud Computing" [ref=f1e93] [cursor=pointer]:
+                - /url: "#"
+        - generic [ref=f1e94]:
+          - heading "Community" [level=3] [ref=f1e95]
+          - list [ref=f1e96]:
+            - listitem [ref=f1e97]:
+              - link "Mentorship" [ref=f1e98] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=f1e99]:
+              - link "Events" [ref=f1e100] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=f1e101]:
+              - link "Success Stories" [ref=f1e102] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=f1e103]:
+              - link "Partner With Us" [ref=f1e104] [cursor=pointer]:
+                - /url: "#"
+        - generic [ref=f1e105]:
+          - heading "Newsletter" [level=3] [ref=f1e106]
+          - paragraph [ref=f1e107]: Stay updated with our latest news and program launches.
+          - generic [ref=f1e108]:
+            - textbox "Email address" [ref=f1e109]
+            - button [ref=f1e110]:
+              - img [ref=f1e111]
+      - paragraph [ref=f1e115]: © 2026 SkillBridge Africa. All rights reserved.
+  - region "Notifications alt+T"
