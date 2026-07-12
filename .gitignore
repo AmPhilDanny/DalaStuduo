@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+node_modules_old_*/
 
 # Environment variables
 .env
@@ -32,6 +33,7 @@ dala-internal-watch-build-errors.js
 .omo/
 .opencode/
 .codegraph/
+.playwright-mcp/
 
 # AI-generated scratch / temp files
 fix.txt
@@ -44,3 +46,28 @@ docs/AGENT_BUILD_PROMPT.md
 
 # Supabase temp
 supabase/.temp/
+
+# AI agent artifacts, archived plans, findings, sprints
+archived/
+
+# Chat logs / session transcripts
+chat session.txt
+admin-console.log
+admin-err.log
+admin-out.log
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Bun lockfile (project uses npm)
+bun.lock
+
+# Separate Skillbridge subproject (old app copy)
+Skillbridge/
+
+# Separate Skillbridge subproject (old app copy)
+Skillbridge/
+
+# Temp / generated files
+Sample.jpg
+SkillBridge_Africa_Boxed_Wireframe.txt
