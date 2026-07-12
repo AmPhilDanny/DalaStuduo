@@ -22,8 +22,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Safety timeout — if Supabase doesn't respond in 6s (e.g. project paused),
+    // release the loading gate so the app renders anyway.
+    const safetyTimer = setTimeout(() => {
+      setIsLoading(false);
+    }, 6000);
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      clearTimeout(safetyTimer);
       setSession(session);
       if (session) fetchProfile(session.user.id);
       else setIsLoading(false);
@@ -39,8 +46,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(safetyTimer);
+      subscription.unsubscribe();
+    };
   }, []);
+
 
   const fetchProfile = async (userId: string) => {
     try {

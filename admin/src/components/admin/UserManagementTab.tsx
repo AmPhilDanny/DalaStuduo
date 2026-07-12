@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import {
   Table,
   TableBody,
@@ -28,7 +29,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Loader2, Search, Plus, Trash2, ShieldAlert } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Loader2, Search, Plus, Trash2, ShieldAlert, Save, X, MapPin, Building2, Globe, Tag, Calendar, Clock, User, Briefcase, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadCSV } from '@/lib/export';
 
@@ -41,6 +43,23 @@ interface AdminProfile {
   avatar_url: string | null;
   created_at: string;
   is_active?: boolean;
+}
+
+interface FullProfile {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  headline: string | null;
+  bio: string | null;
+  role: string;
+  location: string | null;
+  skills: string[];
+  company_name: string | null;
+  github_url: string | null;
+  availability: string;
+  preferred_currency: string;
+  created_at: string;
+  updated_at: string;
 }
 
 const ALL_ROLES = [
@@ -76,7 +95,30 @@ export default function UserManagementTab() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Profile detail dialog
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<FullProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  // Editable fields
+  const [editName, setEditName] = useState('');
+  const [editRole, setEditRole] = useState('');
+  const [editHeadline, setEditHeadline] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editSkills, setEditSkills] = useState('');
+  const [editCompany, setEditCompany] = useState('');
+  const [editGithub, setEditGithub] = useState('');
+  const [editAvailability, setEditAvailability] = useState('');
+  const [editCurrency, setEditCurrency] = useState('');
+  const [editAvatarUrl, setEditAvatarUrl] = useState('');
+
   useEffect(() => { fetchUsers(); }, []);
+
+  useEffect(() => {
+    if (!profileUserId) { setProfile(null); return; }
+    fetchProfile(profileUserId);
+  }, [profileUserId]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -91,6 +133,73 @@ export default function UserManagementTab() {
     } catch (err) {
       toast.error('Failed to load users');
     } finally { setLoading(false); }
+  };
+
+  const fetchProfile = async (userId: string) => {
+    setProfileLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      if (error) throw error;
+      if (data) {
+        const p = data as FullProfile;
+        setProfile(p);
+        setEditName(p.full_name || '');
+        setEditRole(p.role);
+        setEditHeadline(p.headline || '');
+        setEditBio(p.bio || '');
+        setEditLocation(p.location || '');
+        setEditSkills(p.skills?.join(', ') || '');
+        setEditCompany(p.company_name || '');
+        setEditGithub(p.github_url || '');
+        setEditAvailability(p.availability || 'available');
+        setEditCurrency(p.preferred_currency || 'NGN');
+        setEditAvatarUrl(p.avatar_url || '');
+      }
+    } catch (err) {
+      toast.error('Failed to load profile');
+      setProfileUserId(null);
+    } finally { setProfileLoading(false); }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!profileUserId) return;
+    setProfileSaving(true);
+    try {
+      const skillsArray = editSkills
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: editName || null,
+          role: editRole,
+          headline: editHeadline || null,
+          bio: editBio || null,
+          location: editLocation || null,
+          skills: skillsArray,
+          company_name: editCompany || null,
+          github_url: editGithub || null,
+          availability: editAvailability,
+          preferred_currency: editCurrency,
+          avatar_url: editAvatarUrl || null,
+        })
+        .eq('id', profileUserId);
+
+      if (error) throw error;
+
+      toast.success('Profile updated');
+      setProfileUserId(null);
+      setProfile(null);
+      fetchUsers();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save profile');
+    } finally { setProfileSaving(false); }
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
@@ -224,7 +333,11 @@ export default function UserManagementTab() {
             </TableHeader>
             <TableBody>
               {filteredUsers.map((u) => (
-                <TableRow key={u.id}>
+                <TableRow
+                  key={u.id}
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => setProfileUserId(u.id)}
+                >
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="w-8 h-8">
@@ -239,7 +352,7 @@ export default function UserManagementTab() {
                   <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
                     {u.headline || '—'}
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <Select
                       value={u.role}
                       onValueChange={(v) => handleRoleChange(u.id, v)}
@@ -263,7 +376,7 @@ export default function UserManagementTab() {
                       size="sm"
                       variant="ghost"
                       className="text-red-500"
-                      onClick={() => setDeletingId(u.id)}
+                      onClick={(e) => { e.stopPropagation(); setDeletingId(u.id); }}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
@@ -342,6 +455,161 @@ export default function UserManagementTab() {
               Deactivate User
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Profile Detail Dialog */}
+      <Dialog open={!!profileUserId} onOpenChange={(o) => { if (!o) { setProfileUserId(null); setProfile(null); } }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <User className="w-5 h-5 text-secondary" />
+              User Profile
+            </DialogTitle>
+          </DialogHeader>
+
+          {profileLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-secondary" />
+            </div>
+          ) : profile ? (
+            <div className="space-y-6 py-2">
+              {/* Avatar + Name Header */}
+              <div className="flex items-start gap-5">
+                <div className="flex-shrink-0">
+                  <Avatar className="w-20 h-20 border-2 border-border shadow-sm">
+                    <AvatarImage src={profile.avatar_url || undefined} />
+                    <AvatarFallback className="text-2xl bg-primary/10 text-primary font-semibold">
+                      {(profile.full_name || '?').charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Avatar URL</Label>
+                    <Input
+                      value={editAvatarUrl}
+                      onChange={(e) => setEditAvatarUrl(e.target.value)}
+                      placeholder="https://example.com/avatar.jpg"
+                      className="font-mono text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Full Name</Label>
+                    <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="User name" />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Role & Availability */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> Role</Label>
+                  <Select value={editRole} onValueChange={setEditRole}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {ALL_ROLES.map((r) => (
+                        <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Availability</Label>
+                  <Select value={editAvailability} onValueChange={setEditAvailability}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="available">Available</SelectItem>
+                      <SelectItem value="unavailable">Unavailable</SelectItem>
+                      <SelectItem value="busy">Busy</SelectItem>
+                      <SelectItem value="looking">Looking</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Headline & Bio */}
+              <div className="space-y-1.5">
+                <Label>Headline</Label>
+                <Input value={editHeadline} onChange={(e) => setEditHeadline(e.target.value)} placeholder="e.g. Full-stack Developer" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Bio</Label>
+                <Textarea value={editBio} onChange={(e) => setEditBio(e.target.value)} placeholder="User biography..." rows={3} />
+              </div>
+
+              <Separator />
+
+              {/* Location, Company, Currency */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Location</Label>
+                  <Input value={editLocation} onChange={(e) => setEditLocation(e.target.value)} placeholder="e.g. Lagos, Nigeria" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" /> Company</Label>
+                  <Input value={editCompany} onChange={(e) => setEditCompany(e.target.value)} placeholder="Company name" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" /> Currency</Label>
+                  <Select value={editCurrency} onValueChange={setEditCurrency}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NGN">NGN (₦)</SelectItem>
+                      <SelectItem value="GHS">GHS (₵)</SelectItem>
+                      <SelectItem value="KES">KES (KSh)</SelectItem>
+                      <SelectItem value="ZAR">ZAR (R)</SelectItem>
+                      <SelectItem value="UGX">UGX (USh)</SelectItem>
+                      <SelectItem value="TZS">TZS (TSh)</SelectItem>
+                      <SelectItem value="RWF">RWF (FRw)</SelectItem>
+                      <SelectItem value="XOF">XOF (CFA)</SelectItem>
+                      <SelectItem value="XAF">XAF (FCFA)</SelectItem>
+                      <SelectItem value="USD">USD ($)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Skills & GitHub */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> Skills (comma-separated)</Label>
+                  <Input value={editSkills} onChange={(e) => setEditSkills(e.target.value)} placeholder="React, Node.js, Python" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5"><Globe className="w-3.5 h-3.5" /> GitHub URL</Label>
+                  <Input value={editGithub} onChange={(e) => setEditGithub(e.target.value)} placeholder="https://github.com/username" className="font-mono text-xs" />
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Read-only metadata */}
+              <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Joined: <span className="font-medium text-foreground">{new Date(profile.created_at).toLocaleDateString()}</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Last updated: <span className="font-medium text-foreground">{new Date(profile.updated_at).toLocaleDateString()}</span></span>
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2 pt-2">
+                <Button variant="outline" onClick={() => { setProfileUserId(null); setProfile(null); }}>
+                  <X className="w-4 h-4 mr-1.5" />
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveProfile} disabled={profileSaving}>
+                  {profileSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Save className="w-4 h-4 mr-1.5" />}
+                  {profileSaving ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </>

@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -32,7 +31,15 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, Building2, Banknote, Image as ImageIcon } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, Building2, Banknote, Image as ImageIcon, ChevronLeft, ChevronRight, Bell, LogOut, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
@@ -102,7 +109,9 @@ const ORDER_STATUS_STYLES: Record<string, string> = {
 };
 
 export default function AdminDashboard() {
-  const { user, profile, isLoading: authLoading } = useAuth();
+  const { user, profile, isLoading: authLoading, signOut } = useAuth();
+  const [activeTab, setActiveTab] = useState('services');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
 
@@ -688,106 +697,119 @@ export default function AdminDashboard() {
 
   const pendingPayouts = payouts.filter((p) => p.status === 'pending');
 
+  const NAV_ITEMS: { value: string; label: string; icon: React.ReactNode }[] = [
+    { value: 'services', label: 'Services', icon: <LayoutGrid className="w-4 h-4" /> },
+    { value: 'orders', label: 'Orders', icon: <ShoppingCart className="w-4 h-4" /> },
+    { value: 'users', label: 'Users', icon: <Users className="w-4 h-4" /> },
+    { value: 'payouts', label: 'Payouts', icon: <Wallet className="w-4 h-4" /> },
+    { value: 'payment-gateways', label: 'Payment', icon: <CreditCard className="w-4 h-4" /> },
+    { value: 'service-fee', label: 'Fees', icon: <DollarSign className="w-4 h-4" /> },
+    { value: 'disputes', label: 'Disputes', icon: <Scale className="w-4 h-4" /> },
+    { value: 'ai-settings', label: 'AI Settings', icon: <Key className="w-4 h-4" /> },
+    { value: 'manual-payments', label: 'Manual Payments', icon: <Banknote className="w-4 h-4" /> },
+    { value: 'site-settings', label: 'Site Settings', icon: <Settings className="w-4 h-4" /> },
+  ];
+
+  const pendingManualCount = manualPayments.filter((p) => p.status === 'pending').length;
+  const showPayoutBadge = pendingPayouts.length > 0;
+  const showDisputeBadge = disputedOrders.length > 0;
+  const showManualBadge = pendingManualCount > 0;
+
   return (
-    <div className="min-h-screen pt-24 pb-12 px-4">
-      <div className="container mx-auto max-w-7xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-primary flex items-center gap-3">
-            <Shield className="w-7 h-7 text-secondary" />
-            Admin Dashboard
-          </h1>
-          <p className="text-muted-foreground">Manage services, orders, users, and payouts.</p>
+    <div className="flex bg-background relative items-start">
+
+      {/* Sidebar */}
+      <aside className={`sticky top-24 h-[calc(100vh-6rem)] rounded-br-2xl bg-gray-900 text-white flex flex-col transition-all duration-300 z-30 ${sidebarOpen ? 'w-56 min-w-56' : 'w-14 min-w-14'}`}>
+        <div className="flex items-center justify-between px-3 py-4 border-b border-gray-700/50">
+          {sidebarOpen && (
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-purple-400" />
+              <span className="text-sm font-semibold">Admin</span>
+            </div>
+          )}
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors ml-auto">
+            {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
         </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
-          <div className="rounded-xl border bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/20 dark:to-background p-5 shadow-sm hover:shadow-md transition-all duration-200">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-muted-foreground">Services</span>
-              <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <LayoutGrid className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-            <p className="text-3xl font-bold tracking-tight">{services.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Total active services</p>
-          </div>
-          <div className="rounded-xl border bg-gradient-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-background p-5 shadow-sm hover:shadow-md transition-all duration-200">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-muted-foreground">Orders</span>
-              <div className="w-9 h-9 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                <ShoppingCart className="w-4.5 h-4.5 text-purple-600 dark:text-purple-400" />
-              </div>
-            </div>
-            <p className="text-3xl font-bold tracking-tight">{orders.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Total orders placed</p>
-          </div>
-          <div className="rounded-xl border bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/20 dark:to-background p-5 shadow-sm hover:shadow-md transition-all duration-200">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-muted-foreground">Users</span>
-              <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                <Users className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400" />
-              </div>
-            </div>
-            <p className="text-3xl font-bold tracking-tight">{users.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Registered users</p>
-          </div>
-          <div className="rounded-xl border bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/20 dark:to-background p-5 shadow-sm hover:shadow-md transition-all duration-200">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-muted-foreground">Pending Payouts</span>
-              <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <Wallet className="w-4.5 h-4.5 text-amber-600 dark:text-amber-400" />
-              </div>
-            </div>
-            <p className="text-3xl font-bold tracking-tight text-amber-600 dark:text-amber-400">{pendingPayouts.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Awaiting processing</p>
-          </div>
+        <nav className="flex-1 py-4 space-y-1 px-2 overflow-y-auto">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.value}
+              onClick={() => setActiveTab(item.value)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                activeTab === item.value
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              {item.icon}
+              {sidebarOpen && <span className="truncate">{item.label}</span>}
+              {sidebarOpen && item.value === 'payouts' && showPayoutBadge && (
+                <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">{pendingPayouts.length}</span>
+              )}
+              {sidebarOpen && item.value === 'disputes' && showDisputeBadge && (
+                <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">{disputedOrders.length}</span>
+              )}
+              {sidebarOpen && item.value === 'manual-payments' && showManualBadge && (
+                <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">{pendingManualCount}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+        <div className="p-3 border-t border-gray-700/50">
+          {sidebarOpen && <p className="text-[10px] text-gray-500 text-center">SkillBridge Admin</p>}
         </div>
+      </aside>
 
-        <Tabs defaultValue="services" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="services">Services</TabsTrigger>
-            <TabsTrigger value="orders">Orders</TabsTrigger>
-            <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="payouts">
-              Payouts
-              {pendingPayouts.length > 0 && (
-                <Badge variant="destructive" className="ml-2 text-xs">{pendingPayouts.length}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="payment-gateways">
-              <CreditCard className="w-4 h-4 mr-1.5" />
-              Payment
-            </TabsTrigger>
-            <TabsTrigger value="service-fee">
-              <DollarSign className="w-4 h-4 mr-1.5" />
-              Fees
-            </TabsTrigger>
-            <TabsTrigger value="disputes">
-              <Scale className="w-4 h-4 mr-1.5" />
-              Disputes
-              {disputedOrders.length > 0 && (
-                <Badge variant="destructive" className="ml-2 text-xs">{disputedOrders.length}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="ai-settings">
-              <Key className="w-4 h-4 mr-1.5" />
-              AI Settings
-            </TabsTrigger>
-            <TabsTrigger value="manual-payments">
-              <Banknote className="w-4 h-4 mr-1.5" />
-              Manual Payments
-              {manualPayments.filter((p) => p.status === 'pending').length > 0 && (
-                <Badge variant="destructive" className="ml-2 text-xs">{manualPayments.filter((p) => p.status === 'pending').length}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="site-settings">
-              <Settings className="w-4 h-4 mr-1.5" />
-              Site Settings
-            </TabsTrigger>
-          </TabsList>
+      {/* Main Content */}
+      <div className={`flex-1 w-full min-w-0 transition-all duration-300`}>
+        <div className="px-6 py-8 max-w-7xl mx-auto">
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
+            <div className="rounded-xl border bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/20 dark:to-background p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-muted-foreground">Services</span>
+                <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                  <LayoutGrid className="w-4.5 h-4.5 text-blue-600 dark:text-blue-400" />
+                </div>
+              </div>
+              <p className="text-3xl font-bold tracking-tight">{services.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">Total services</p>
+            </div>
+            <div className="rounded-xl border bg-gradient-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-background p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-muted-foreground">Orders</span>
+                <div className="w-9 h-9 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                  <ShoppingCart className="w-4.5 h-4.5 text-purple-600 dark:text-purple-400" />
+                </div>
+              </div>
+              <p className="text-3xl font-bold tracking-tight">{orders.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">Total orders</p>
+            </div>
+            <div className="rounded-xl border bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/20 dark:to-background p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-muted-foreground">Users</span>
+                <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                  <Users className="w-4.5 h-4.5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+              </div>
+              <p className="text-3xl font-bold tracking-tight">{users.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">Registered users</p>
+            </div>
+            <div className="rounded-xl border bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/20 dark:to-background p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-muted-foreground">Pending Payouts</span>
+                <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                  <Wallet className="w-4.5 h-4.5 text-amber-600 dark:text-amber-400" />
+                </div>
+              </div>
+              <p className="text-3xl font-bold tracking-tight text-amber-600 dark:text-amber-400">{pendingPayouts.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">Awaiting processing</p>
+            </div>
+          </div>
 
-          {/* ── Services Tab ── */}
-          <TabsContent value="services">
+          {/* ═══ SERVICES ═══ */}
+          {activeTab === 'services' && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -812,32 +834,11 @@ export default function AdminDashboard() {
                         <TableCell className="font-medium">{svc.name}</TableCell>
                         <TableCell>{CATEGORY_LABELS[svc.category] || svc.category}</TableCell>
                         <TableCell>₦{Number(svc.base_price).toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Badge variant={svc.is_active ? 'default' : 'secondary'}>
-                            {svc.is_active ? 'Active' : 'Disabled'}
-                          </Badge>
-                        </TableCell>
+                        <TableCell><Badge variant={svc.is_active ? 'default' : 'secondary'}>{svc.is_active ? 'Active' : 'Disabled'}</Badge></TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEditingService(svc);
-                                setEditName(svc.name);
-                                setEditDesc(svc.description || '');
-                                setEditPrice(svc.base_price);
-                              }}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant={svc.is_active ? 'secondary' : 'default'}
-                              onClick={() => toggleServiceActive(svc)}
-                            >
-                              {svc.is_active ? 'Disable' : 'Enable'}
-                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => { setEditingService(svc); setEditName(svc.name); setEditDesc(svc.description || ''); setEditPrice(svc.base_price); }}>Edit</Button>
+                            <Button size="sm" variant={svc.is_active ? 'secondary' : 'default'} onClick={() => toggleServiceActive(svc)}>{svc.is_active ? 'Disable' : 'Enable'}</Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -846,10 +847,10 @@ export default function AdminDashboard() {
                 </Table>
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          {/* ── Orders Tab ── */}
-          <TabsContent value="orders">
+          {/* ═══ ORDERS ═══ */}
+          {activeTab === 'orders' && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -857,9 +858,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center gap-3">
                     <Button variant="outline" size="sm" onClick={exportOrders}><Download className="w-3.5 h-3.5 mr-1" /> Export CSV</Button>
                     <Select value={orderStatus} onValueChange={setOrderStatus}>
-                      <SelectTrigger className="w-36">
-                        <SelectValue placeholder="All statuses" />
-                      </SelectTrigger>
+                      <SelectTrigger className="w-36"><SelectValue placeholder="All statuses" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">All statuses</SelectItem>
                         <SelectItem value="pending">Pending</SelectItem>
@@ -876,47 +875,35 @@ export default function AdminDashboard() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Service</TableHead>
-                      <TableHead>Buyer</TableHead>
-                      <TableHead>Provider</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Date</TableHead>
+                      <TableHead>Service</TableHead><TableHead>Buyer</TableHead><TableHead>Provider</TableHead>
+                      <TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredOrders.map((ord) => (
                       <TableRow key={ord.id}>
-                        <TableCell className="max-w-[200px] truncate">
-                          {ord.listing?.title || '—'}
-                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate">{ord.listing?.title || '—'}</TableCell>
                         <TableCell>{ord.buyer?.full_name || '—'}</TableCell>
                         <TableCell>{ord.provider?.full_name || '—'}</TableCell>
                         <TableCell>₦{Number(ord.amount).toLocaleString()}</TableCell>
                         <TableCell>
-                          <Select
-                            value={ord.status}
-                            onValueChange={async (newStatus) => {
-                              try {
-                                const { data: ses } = await supabase.auth.getSession();
-                                const tok = ses.session?.access_token;
-                                if (!tok) throw new Error('Not authenticated');
-                                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                                const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/orders/${ord.id}`, {
-                                  method: 'PATCH',
-                                  headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ status: newStatus }),
-                                });
-                                if (!res.ok) throw new Error('Failed');
-                                toast.success(`Order ${newStatus}`);
-                                fetchAll();
-                              } catch { toast.error('Failed to update order status'); }
-                            }}
-                          >
-                            <SelectTrigger className="h-7 w-32 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
+                          <Select value={ord.status} onValueChange={async (newStatus) => {
+                            try {
+                              const { data: ses } = await supabase.auth.getSession();
+                              const tok = ses.session?.access_token;
+                              if (!tok) throw new Error('Not authenticated');
+                              const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                              const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/orders/${ord.id}`, {
+                                method: 'PATCH', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: newStatus }),
+                              });
+                              if (!res.ok) throw new Error('Failed');
+                              toast.success(`Order ${newStatus}`);
+                              fetchAll();
+                            } catch { toast.error('Failed to update order status'); }
+                          }}>
+                            <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="pending">Pending</SelectItem>
                               <SelectItem value="in_progress">In Progress</SelectItem>
@@ -926,45 +913,29 @@ export default function AdminDashboard() {
                             </SelectContent>
                           </Select>
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {new Date(ord.created_at).toLocaleDateString()}
-                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{new Date(ord.created_at).toLocaleDateString()}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button size="sm" variant="ghost" asChild>
-                              <a
-                                href={`https://supabase.com/dashboard/project/krihvhyexqstphxqkljr/editor/r/orders/${ord.id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                              </a>
+                              <a href={`https://supabase.com/dashboard/project/krihvhyexqstphxqkljr/editor/r/orders/${ord.id}`} target="_blank" rel="noopener noreferrer"><Eye className="w-3.5 h-3.5" /></a>
                             </Button>
-                            {ord.status === 'pending' || ord.status === 'in_progress' ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-red-500"
-                                onClick={async () => {
-                                  try {
-                                    const { data: ses } = await supabase.auth.getSession();
-                                    const tok = ses.session?.access_token;
-                                    if (!tok) throw new Error('Not authenticated');
-                                    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                                    const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/orders/${ord.id}`, {
-                                      method: 'PATCH',
-                                      headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ status: 'cancelled' }),
-                                    });
-                                    if (!res.ok) throw new Error('Failed');
-                                    toast.success('Order cancelled');
-                                    fetchAll();
-                                  } catch { toast.error('Failed to cancel order'); }
-                                }}
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                              </Button>
-                            ) : null}
+                            {(ord.status === 'pending' || ord.status === 'in_progress') && (
+                              <Button size="sm" variant="ghost" className="text-red-500" onClick={async () => {
+                                try {
+                                  const { data: ses } = await supabase.auth.getSession();
+                                  const tok = ses.session?.access_token;
+                                  if (!tok) throw new Error('Not authenticated');
+                                  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                                  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/orders/${ord.id}`, {
+                                    method: 'PATCH', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ status: 'cancelled' }),
+                                  });
+                                  if (!res.ok) throw new Error('Failed');
+                                  toast.success('Order cancelled');
+                                  fetchAll();
+                                } catch { toast.error('Failed to cancel'); }
+                              }}><XCircle className="w-3.5 h-3.5" /></Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -973,15 +944,13 @@ export default function AdminDashboard() {
                 </Table>
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          {/* ── Users Tab ── */}
-          <TabsContent value="users">
-            <UserManagementTab />
-          </TabsContent>
+          {/* ═══ USERS ═══ */}
+          {activeTab === 'users' && <UserManagementTab />}
 
-          {/* ── Payouts Tab ── */}
-          <TabsContent value="payouts">
+          {/* ═══ PAYOUTS ═══ */}
+          {activeTab === 'payouts' && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -996,68 +965,28 @@ export default function AdminDashboard() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>User</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Bank</TableHead>
-                        <TableHead>Account</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Notes</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead>User</TableHead><TableHead>Amount</TableHead><TableHead>Bank</TableHead>
+                        <TableHead>Account</TableHead><TableHead>Status</TableHead><TableHead>Notes</TableHead>
+                        <TableHead>Date</TableHead><TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {payouts.map((pt) => (
                         <TableRow key={pt.id}>
                           <TableCell>{pt.profile?.full_name || '—'}</TableCell>
-                          <TableCell className="font-medium">
-                            ₦{Number(pt.amount).toLocaleString()}
-                          </TableCell>
+                          <TableCell className="font-medium">₦{Number(pt.amount).toLocaleString()}</TableCell>
                           <TableCell>{pt.bank_name}</TableCell>
                           <TableCell>{pt.account_name} / {pt.account_number}</TableCell>
                           <TableCell>
-                            <Badge
-                              variant="secondary"
-                              className={
-                                pt.status === 'paid'
-                                  ? 'bg-green-500/15 text-green-700'
-                                  : pt.status === 'rejected'
-                                  ? 'bg-red-500/15 text-red-700'
-                                  : pt.status === 'processing'
-                                  ? 'bg-blue-500/15 text-blue-700'
-                                  : 'bg-yellow-500/15 text-yellow-700'
-                              }
-                            >
-                              {pt.status}
-                            </Badge>
+                            <Badge variant="secondary" className={pt.status === 'paid' ? 'bg-green-500/15 text-green-700' : pt.status === 'rejected' ? 'bg-red-500/15 text-red-700' : pt.status === 'processing' ? 'bg-blue-500/15 text-blue-700' : 'bg-yellow-500/15 text-yellow-700'}>{pt.status}</Badge>
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
-                            {pt.admin_notes || '—'}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {new Date(pt.created_at).toLocaleDateString()}
-                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">{pt.admin_notes || '—'}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{new Date(pt.created_at).toLocaleDateString()}</TableCell>
                           <TableCell className="text-right">
                             {pt.status === 'pending' && (
                               <div className="flex justify-end gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="text-green-600"
-                                  onClick={() => setSelectedPayout(pt)}
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                                  Process
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="text-red-600"
-                                  onClick={() => handlePayoutAction(pt.id, 'rejected')}
-                                >
-                                  <XCircle className="w-3.5 h-3.5 mr-1" />
-                                  Reject
-                                </Button>
+                                <Button size="sm" variant="outline" className="text-green-600" onClick={() => setSelectedPayout(pt)}><CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Process</Button>
+                                <Button size="sm" variant="outline" className="text-red-600" onClick={() => handlePayoutAction(pt.id, 'rejected')}><XCircle className="w-3.5 h-3.5 mr-1" /> Reject</Button>
                               </div>
                             )}
                           </TableCell>
@@ -1068,17 +997,14 @@ export default function AdminDashboard() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          {/* ── Payment Gateways Tab ── */}
-          <TabsContent value="payment-gateways">
+          {/* ═══ PAYMENT GATEWAYS ═══ */}
+          {activeTab === 'payment-gateways' && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-secondary" />
-                    Payment Gateway Configuration
-                  </CardTitle>
+                  <CardTitle className="flex items-center gap-2"><CreditCard className="w-5 h-5 text-secondary" /> Payment Gateway Configuration</CardTitle>
                   <Button onClick={savePaymentConfig} disabled={savingPaymentConfig} className="gap-1.5">
                     {savingPaymentConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     {savingPaymentConfig ? 'Saving...' : 'Save'}
@@ -1086,191 +1012,77 @@ export default function AdminDashboard() {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-6">
-                  Configure payment gateways for your marketplace. Settings apply globally.
-                </p>
-
+                <p className="text-sm text-muted-foreground mb-6">Configure payment gateways for your marketplace. Settings apply globally.</p>
                 {loadingPaymentConfig ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-secondary" />
-                  </div>
+                  <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-secondary" /></div>
                 ) : (
                   <div className="space-y-8 max-w-2xl">
-                    {/* Paystack */}
                     <div className="border rounded-lg p-4 space-y-4">
                       <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold text-base">Paystack</h3>
-                          <p className="text-xs text-muted-foreground">Nigeria, Ghana</p>
-                        </div>
+                        <div><h3 className="font-semibold text-base">Paystack</h3><p className="text-xs text-muted-foreground">Nigeria, Ghana</p></div>
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={paymentGateways.paystack?.enabled ?? true}
-                            onChange={(e) =>
-                              setPaymentGateways((prev) => ({
-                                ...prev,
-                                paystack: { ...prev.paystack, enabled: e.target.checked, public_key: prev.paystack?.public_key || '', secret_key: prev.paystack?.secret_key || '' },
-                              }))
-                            }
-                            className="rounded border-gray-300"
-                          />
+                          <input type="checkbox" checked={paymentGateways.paystack?.enabled ?? true}
+                            onChange={(e) => setPaymentGateways((prev) => ({ ...prev, paystack: { ...prev.paystack, enabled: e.target.checked, public_key: prev.paystack?.public_key || '', secret_key: prev.paystack?.secret_key || '' } }))}
+                            className="rounded border-gray-300" />
                           <span className="text-sm">Enabled</span>
                         </label>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Public Key</Label>
-                          <Input
-                            type="password"
-                            placeholder="pk_test_..."
-                            value={paymentGateways.paystack?.public_key || ''}
-                            onChange={(e) =>
-                              setPaymentGateways((prev) => ({
-                                ...prev,
-                                paystack: { ...prev.paystack, public_key: e.target.value, secret_key: prev.paystack?.secret_key || '', enabled: prev.paystack?.enabled ?? true },
-                              }))
-                            }
-                            className="font-mono text-xs"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Secret Key</Label>
-                          <Input
-                            type="password"
-                            placeholder="sk_test_..."
-                            value={paymentGateways.paystack?.secret_key || ''}
-                            onChange={(e) =>
-                              setPaymentGateways((prev) => ({
-                                ...prev,
-                                paystack: { ...prev.paystack, secret_key: e.target.value, public_key: prev.paystack?.public_key || '', enabled: prev.paystack?.enabled ?? true },
-                              }))
-                            }
-                            className="font-mono text-xs"
-                          />
-                        </div>
+                        <div className="space-y-1.5"><Label className="text-xs">Public Key</Label>
+                          <Input type="password" placeholder="pk_test_..." value={paymentGateways.paystack?.public_key || ''}
+                            onChange={(e) => setPaymentGateways((prev) => ({ ...prev, paystack: { ...prev.paystack, public_key: e.target.value, secret_key: prev.paystack?.secret_key || '', enabled: prev.paystack?.enabled ?? true } }))}
+                            className="font-mono text-xs" /></div>
+                        <div className="space-y-1.5"><Label className="text-xs">Secret Key</Label>
+                          <Input type="password" placeholder="sk_test_..." value={paymentGateways.paystack?.secret_key || ''}
+                            onChange={(e) => setPaymentGateways((prev) => ({ ...prev, paystack: { ...prev.paystack, secret_key: e.target.value, public_key: prev.paystack?.public_key || '', enabled: prev.paystack?.enabled ?? true } }))}
+                            className="font-mono text-xs" /></div>
                       </div>
                     </div>
-
-                    {/* Flutterwave */}
                     <div className="border rounded-lg p-4 space-y-4">
                       <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold text-base">Flutterwave</h3>
-                          <p className="text-xs text-muted-foreground">Pan-Africa (KES, ZAR, UGX, XOF, XAF, etc.)</p>
-                        </div>
+                        <div><h3 className="font-semibold text-base">Flutterwave</h3><p className="text-xs text-muted-foreground">Pan-Africa</p></div>
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={paymentGateways.flutterwave?.enabled ?? false}
-                            onChange={(e) =>
-                              setPaymentGateways((prev) => ({
-                                ...prev,
-                                flutterwave: { ...prev.flutterwave, enabled: e.target.checked, public_key: prev.flutterwave?.public_key || '', secret_key: prev.flutterwave?.secret_key || '' },
-                              }))
-                            }
-                            className="rounded border-gray-300"
-                          />
+                          <input type="checkbox" checked={paymentGateways.flutterwave?.enabled ?? false}
+                            onChange={(e) => setPaymentGateways((prev) => ({ ...prev, flutterwave: { ...prev.flutterwave, enabled: e.target.checked, public_key: prev.flutterwave?.public_key || '', secret_key: prev.flutterwave?.secret_key || '' } }))}
+                            className="rounded border-gray-300" />
                           <span className="text-sm">Enabled</span>
                         </label>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Public Key</Label>
-                          <Input
-                            type="password"
-                            placeholder="FLWPUBK-..."
-                            value={paymentGateways.flutterwave?.public_key || ''}
-                            onChange={(e) =>
-                              setPaymentGateways((prev) => ({
-                                ...prev,
-                                flutterwave: { ...prev.flutterwave, public_key: e.target.value, secret_key: prev.flutterwave?.secret_key || '', enabled: prev.flutterwave?.enabled ?? false },
-                              }))
-                            }
-                            className="font-mono text-xs"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Secret Key</Label>
-                          <Input
-                            type="password"
-                            placeholder="FLWSECK-..."
-                            value={paymentGateways.flutterwave?.secret_key || ''}
-                            onChange={(e) =>
-                              setPaymentGateways((prev) => ({
-                                ...prev,
-                                flutterwave: { ...prev.flutterwave, secret_key: e.target.value, public_key: prev.flutterwave?.public_key || '', enabled: prev.flutterwave?.enabled ?? false },
-                              }))
-                            }
-                            className="font-mono text-xs"
-                          />
-                        </div>
+                        <div className="space-y-1.5"><Label className="text-xs">Public Key</Label>
+                          <Input type="password" placeholder="FLWPUBK-..." value={paymentGateways.flutterwave?.public_key || ''}
+                            onChange={(e) => setPaymentGateways((prev) => ({ ...prev, flutterwave: { ...prev.flutterwave, public_key: e.target.value, secret_key: prev.flutterwave?.secret_key || '', enabled: prev.flutterwave?.enabled ?? false } }))}
+                            className="font-mono text-xs" /></div>
+                        <div className="space-y-1.5"><Label className="text-xs">Secret Key</Label>
+                          <Input type="password" placeholder="FLWSECK-..." value={paymentGateways.flutterwave?.secret_key || ''}
+                            onChange={(e) => setPaymentGateways((prev) => ({ ...prev, flutterwave: { ...prev.flutterwave, secret_key: e.target.value, public_key: prev.flutterwave?.public_key || '', enabled: prev.flutterwave?.enabled ?? false } }))}
+                            className="font-mono text-xs" /></div>
                       </div>
                     </div>
-
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={loadPaymentConfig} disabled={loadingPaymentConfig}>
-                        {loadingPaymentConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                        Refresh
-                      </Button>
-                    </div>
-
-                    {/* Offline / Manual Payment Config */}
+                    <Button variant="outline" onClick={loadPaymentConfig} disabled={loadingPaymentConfig}>
+                      {loadingPaymentConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Refresh
+                    </Button>
                     <Separator className="my-6" />
                     <div className="space-y-4 max-w-2xl">
-                      <h3 className="font-semibold text-base flex items-center gap-2">
-                        <Building2 className="w-4 h-4" />
-                        Offline / Bank Transfer Payment
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Configure bank account details shown to buyers who choose to pay by bank transfer.
-                      </p>
+                      <h3 className="font-semibold text-base flex items-center gap-2"><Building2 className="w-4 h-4" /> Offline / Bank Transfer Payment</h3>
+                      <p className="text-sm text-muted-foreground">Configure bank account details shown to buyers who choose to pay by bank transfer.</p>
                       {loadingOfflinePayment ? (
-                        <div className="flex justify-center py-4">
-                          <Loader2 className="w-5 h-5 animate-spin text-secondary" />
-                        </div>
+                        <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-secondary" /></div>
                       ) : (
                         <div className="space-y-3">
                           <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={offlinePayment.enabled}
-                              onChange={(e) => setOfflinePayment({ ...offlinePayment, enabled: e.target.checked })}
-                              className="rounded border-gray-300"
-                            />
+                            <input type="checkbox" checked={offlinePayment.enabled} onChange={(e) => setOfflinePayment({ ...offlinePayment, enabled: e.target.checked })} className="rounded border-gray-300" />
                             <span className="text-sm">Enable bank transfer payments</span>
                           </label>
                           <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Bank Name</Label>
-                              <Input placeholder="e.g. GTBank" value={offlinePayment.bank_name} onChange={(e) => setOfflinePayment({ ...offlinePayment, bank_name: e.target.value })} />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Account Number</Label>
-                              <Input placeholder="0123456789" value={offlinePayment.account_number} onChange={(e) => setOfflinePayment({ ...offlinePayment, account_number: e.target.value })} />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Account Name</Label>
-                              <Input placeholder="John Doe" value={offlinePayment.account_name} onChange={(e) => setOfflinePayment({ ...offlinePayment, account_name: e.target.value })} />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Routing Number</Label>
-                              <Input placeholder="Optional" value={offlinePayment.routing_number} onChange={(e) => setOfflinePayment({ ...offlinePayment, routing_number: e.target.value })} />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">SWIFT Code</Label>
-                              <Input placeholder="Optional" value={offlinePayment.swift_code} onChange={(e) => setOfflinePayment({ ...offlinePayment, swift_code: e.target.value })} />
-                            </div>
+                            <div className="space-y-1.5"><Label className="text-xs">Bank Name</Label><Input placeholder="e.g. GTBank" value={offlinePayment.bank_name} onChange={(e) => setOfflinePayment({ ...offlinePayment, bank_name: e.target.value })} /></div>
+                            <div className="space-y-1.5"><Label className="text-xs">Account Number</Label><Input placeholder="0123456789" value={offlinePayment.account_number} onChange={(e) => setOfflinePayment({ ...offlinePayment, account_number: e.target.value })} /></div>
+                            <div className="space-y-1.5"><Label className="text-xs">Account Name</Label><Input placeholder="John Doe" value={offlinePayment.account_name} onChange={(e) => setOfflinePayment({ ...offlinePayment, account_name: e.target.value })} /></div>
+                            <div className="space-y-1.5"><Label className="text-xs">Routing Number</Label><Input placeholder="Optional" value={offlinePayment.routing_number} onChange={(e) => setOfflinePayment({ ...offlinePayment, routing_number: e.target.value })} /></div>
+                            <div className="space-y-1.5"><Label className="text-xs">SWIFT Code</Label><Input placeholder="Optional" value={offlinePayment.swift_code} onChange={(e) => setOfflinePayment({ ...offlinePayment, swift_code: e.target.value })} /></div>
                           </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Payment Instructions (shown to buyers)</Label>
-                            <Textarea
-                              placeholder="Please make a transfer to the account above and upload your payment screenshot..."
-                              value={offlinePayment.instructions}
-                              onChange={(e) => setOfflinePayment({ ...offlinePayment, instructions: e.target.value })}
-                              rows={2}
-                            />
-                          </div>
+                          <div className="space-y-1.5"><Label className="text-xs">Payment Instructions</Label>
+                            <Textarea placeholder="Please make a transfer..." value={offlinePayment.instructions} onChange={(e) => setOfflinePayment({ ...offlinePayment, instructions: e.target.value })} rows={2} /></div>
                           <Button onClick={saveOfflinePaymentConfig} disabled={savingOfflinePayment} className="gap-1.5">
                             {savingOfflinePayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             {savingOfflinePayment ? 'Saving...' : 'Save Offline Config'}
@@ -1282,42 +1094,25 @@ export default function AdminDashboard() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          {/* ── Service Fee Tab ── */}
-          <TabsContent value="service-fee">
+          {/* ═══ FEES ═══ */}
+          {activeTab === 'service-fee' && (
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-secondary" />
-                  Service Fee Configuration
-                </CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-secondary" /> Service Fee Configuration</CardTitle></CardHeader>
               <CardContent className="max-w-lg">
-                <p className="text-sm text-muted-foreground mb-6">
-                  Set the platform commission percentage deducted from each payment before release to the provider.
-                </p>
+                <p className="text-sm text-muted-foreground mb-6">Set the platform commission percentage deducted from each payment before release to the provider.</p>
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Commission Percentage</Label>
                     <div className="flex items-center gap-3">
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.5}
-                        value={serviceFeePct}
-                        onChange={(e) => setServiceFeePct(Number(e.target.value))}
-                        className="w-32 text-lg font-bold"
-                      />
+                      <Input type="number" min={0} max={100} step={0.5} value={serviceFeePct} onChange={(e) => setServiceFeePct(Number(e.target.value))} className="w-32 text-lg font-bold" />
                       <span className="text-lg font-semibold">%</span>
                     </div>
                   </div>
                   <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground">
                     <p className="font-medium text-foreground mb-1">Example</p>
-                    <p>
-                      Order amount: ₦10,000 &rarr; Fee: ₦{ (10000 * serviceFeePct / 100).toLocaleString() } &rarr; Provider receives: ₦{ (10000 - 10000 * serviceFeePct / 100).toLocaleString() }
-                    </p>
+                    <p>Order amount: ₦10,000 &rarr; Fee: ₦{(10000 * serviceFeePct / 100).toLocaleString()} &rarr; Provider receives: ₦{(10000 - 10000 * serviceFeePct / 100).toLocaleString()}</p>
                   </div>
                   <Button onClick={saveServiceFee} disabled={savingServiceFee} className="gap-1.5">
                     {savingServiceFee ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -1326,80 +1121,35 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          {/* ── Disputes Tab ── */}
-          <TabsContent value="disputes">
+          {/* ═══ DISPUTES ═══ */}
+          {activeTab === 'disputes' && (
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Scale className="w-5 h-5 text-secondary" />
-                  Dispute Management
-                </CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Scale className="w-5 h-5 text-secondary" /> Dispute Management</CardTitle></CardHeader>
               <CardContent>
                 {disputedOrders.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No disputed orders. All is well.</p>
                 ) : (
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Service</TableHead>
-                        <TableHead>Buyer</TableHead>
-                        <TableHead>Provider</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
+                      <TableRow><TableHead>Service</TableHead><TableHead>Buyer</TableHead><TableHead>Provider</TableHead><TableHead>Amount</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Actions</TableHead></TableRow>
                     </TableHeader>
                     <TableBody>
                       {disputedOrders.map((ord) => (
                         <TableRow key={ord.id}>
-                          <TableCell className="max-w-[200px] truncate">
-                            {ord.listing?.title || '-'}
-                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate">{ord.listing?.title || '-'}</TableCell>
                           <TableCell>{ord.buyer?.full_name || '-'}</TableCell>
                           <TableCell>{ord.provider?.full_name || '-'}</TableCell>
-                          <TableCell className="font-medium">
-                            ₦{Number(ord.amount).toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {new Date(ord.created_at).toLocaleDateString()}
-                          </TableCell>
+                          <TableCell className="font-medium">₦{Number(ord.amount).toLocaleString()}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{new Date(ord.created_at).toLocaleDateString()}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <Button size="sm" variant="ghost" asChild>
-                                <Link to={`/disputes/${ord.id}`}>
-                                  <Eye className="w-3.5 h-3.5" />
-                                </Link>
+                              <Button size="sm" variant="outline" className="text-green-600 border-green-200" disabled={resolvingDispute === ord.id} onClick={() => resolveDispute(ord.id, 'release')}>
+                                {resolvingDispute === ord.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1" />} Release
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-green-600 border-green-200 hover:bg-green-50"
-                                disabled={resolvingDispute === ord.id}
-                                onClick={() => resolveDispute(ord.id, 'release')}
-                              >
-                                {resolvingDispute === ord.id ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                                ) : (
-                                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                                )}
-                                Release
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-purple-600 border-purple-200 hover:bg-purple-50"
-                                disabled={resolvingDispute === ord.id}
-                                onClick={() => resolveDispute(ord.id, 'refund')}
-                              >
-                                {resolvingDispute === ord.id ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                                ) : (
-                                  <XCircle className="w-3.5 h-3.5 mr-1" />
-                                )}
-                                Refund
+                              <Button size="sm" variant="outline" className="text-purple-600 border-purple-200" disabled={resolvingDispute === ord.id} onClick={() => resolveDispute(ord.id, 'refund')}>
+                                {resolvingDispute === ord.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <XCircle className="w-3.5 h-3.5 mr-1" />} Refund
                               </Button>
                             </div>
                           </TableCell>
@@ -1410,15 +1160,12 @@ export default function AdminDashboard() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
-          <TabsContent value="ai-settings">
+          )}
+
+          {/* ═══ AI SETTINGS ═══ */}
+          {activeTab === 'ai-settings' && (
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Key className="w-5 h-5 text-secondary" />
-                  AI Provider API Keys
-                </CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Key className="w-5 h-5 text-secondary" /> AI Provider API Keys</CardTitle></CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground mb-6">
                   Store API keys here instead of using <code className="bg-muted px-1.5 py-0.5 rounded text-xs">supabase secrets set</code>.
@@ -1430,26 +1177,11 @@ export default function AdminDashboard() {
                       <div className="flex items-center justify-between">
                         <Label className="text-sm font-medium">{label}</Label>
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={aiEnabled[key] ?? true}
-                            onChange={(e) =>
-                              setAiEnabled((prev) => ({ ...prev, [key]: e.target.checked }))
-                            }
-                            className="rounded border-gray-300"
-                          />
+                          <input type="checkbox" checked={aiEnabled[key] ?? true} onChange={(e) => setAiEnabled((prev) => ({ ...prev, [key]: e.target.checked }))} className="rounded border-gray-300" />
                           <span className="text-xs">{aiEnabled[key] !== false ? 'Enabled' : 'Disabled'}</span>
                         </label>
                       </div>
-                      <div className="flex gap-2">
-                        <Input
-                          type="password"
-                          placeholder={`${label} API key...`}
-                          value={aiKeys[key]}
-                          onChange={(e) => setAiKeys((prev) => ({ ...prev, [key]: e.target.value }))}
-                          className="flex-1 font-mono text-xs"
-                        />
-                      </div>
+                      <Input type="password" placeholder={`${label} API key...`} value={aiKeys[key]} onChange={(e) => setAiKeys((prev) => ({ ...prev, [key]: e.target.value }))} className="flex-1 font-mono text-xs" />
                     </div>
                   ))}
                   <div className="flex gap-2 pt-2">
@@ -1457,34 +1189,27 @@ export default function AdminDashboard() {
                       {savingKeys ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                       {savingKeys ? 'Saving...' : 'Save all keys'}
                     </Button>
-                    <Button variant="outline" onClick={loadAiKeys} disabled={loadingKeys}>
-                      {loadingKeys ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Refresh'}
-                    </Button>
+                    <Button variant="outline" onClick={loadAiKeys} disabled={loadingKeys}>{loadingKeys ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Refresh'}</Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-          {/* ── Manual Payments Tab ── */}
-          <TabsContent value="manual-payments">
+          )}
+
+          {/* ═══ MANUAL PAYMENTS ═══ */}
+          {activeTab === 'manual-payments' && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Banknote className="w-5 h-5 text-secondary" />
-                    Manual Payment Verification
-                  </CardTitle>
+                  <CardTitle className="flex items-center gap-2"><Banknote className="w-5 h-5 text-secondary" /> Manual Payment Verification</CardTitle>
                   <Button variant="outline" size="sm" onClick={loadManualPayments} disabled={loadingManualPayments}>
-                    {loadingManualPayments ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                    Refresh
+                    {loadingManualPayments ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Refresh
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 {loadingManualPayments ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-secondary" />
-                  </div>
+                  <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-secondary" /></div>
                 ) : manualPayments.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No manual payments to verify.</p>
                 ) : (
@@ -1495,56 +1220,25 @@ export default function AdminDashboard() {
                           <div className="flex items-start justify-between">
                             <div className="space-y-1">
                               <p className="font-medium">₦{Number(mp.amount).toLocaleString()} — {mp.bank_name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                Buyer: {mp.buyer_id.slice(0, 8)}... | {new Date(mp.created_at).toLocaleString()}
-                              </p>
+                              <p className="text-sm text-muted-foreground">Buyer: {mp.buyer_id.slice(0, 8)}... | {new Date(mp.created_at).toLocaleString()}</p>
                               {mp.notes && <p className="text-sm text-muted-foreground italic">"{mp.notes}"</p>}
                             </div>
-                            <Badge
-                              variant="secondary"
-                              className={
-                                mp.status === 'approved' ? 'bg-green-500/15 text-green-700' :
-                                mp.status === 'rejected' ? 'bg-red-500/15 text-red-700' :
-                                'bg-yellow-500/15 text-yellow-700'
-                              }
-                            >
-                              {mp.status}
-                            </Badge>
+                            <Badge variant="secondary" className={mp.status === 'approved' ? 'bg-green-500/15 text-green-700' : mp.status === 'rejected' ? 'bg-red-500/15 text-red-700' : 'bg-yellow-500/15 text-yellow-700'}>{mp.status}</Badge>
                           </div>
                           {mp.screenshot_url && (
-                            <div className="mt-3">
-                              <a href={mp.screenshot_url} target="_blank" rel="noopener noreferrer" className="text-xs text-secondary hover:underline inline-flex items-center gap-1">
-                                <ImageIcon className="w-3 h-3" />
-                                View Screenshot
-                              </a>
-                            </div>
+                            <div className="mt-3"><a href={mp.screenshot_url} target="_blank" rel="noopener noreferrer" className="text-xs text-secondary hover:underline inline-flex items-center gap-1"><ImageIcon className="w-3 h-3" /> View Screenshot</a></div>
                           )}
                           {mp.status === 'pending' && (
                             <div className="flex gap-2 mt-4">
-                              <Button
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700"
-                                onClick={() => handleApproveManualPayment(mp.id)}
-                                disabled={processingManualPayment === mp.id}
-                              >
-                                {processingManualPayment === mp.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1" />}
-                                Approve
+                              <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleApproveManualPayment(mp.id)} disabled={processingManualPayment === mp.id}>
+                                {processingManualPayment === mp.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1" />} Approve
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-red-600"
-                                onClick={() => handleRejectManualPayment(mp.id)}
-                                disabled={processingManualPayment === mp.id}
-                              >
-                                {processingManualPayment === mp.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <XCircle className="w-3.5 h-3.5 mr-1" />}
-                                Reject
+                              <Button size="sm" variant="outline" className="text-red-600" onClick={() => handleRejectManualPayment(mp.id)} disabled={processingManualPayment === mp.id}>
+                                {processingManualPayment === mp.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <XCircle className="w-3.5 h-3.5 mr-1" />} Reject
                               </Button>
                             </div>
                           )}
-                          {mp.admin_notes && (
-                            <p className="text-xs text-muted-foreground mt-2">Admin note: {mp.admin_notes}</p>
-                          )}
+                          {mp.admin_notes && <p className="text-xs text-muted-foreground mt-2">Admin note: {mp.admin_notes}</p>}
                         </CardContent>
                       </Card>
                     ))}
@@ -1552,38 +1246,21 @@ export default function AdminDashboard() {
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
+          )}
 
-          {/* ── Site Settings Tab ── */}
-          <TabsContent value="site-settings">
-            <SiteSettingsTab />
-          </TabsContent>
-        </Tabs>
+          {/* ═══ SITE SETTINGS ═══ */}
+          {activeTab === 'site-settings' && <SiteSettingsTab />}
+        </div>
       </div>
 
       {/* Edit Service Dialog */}
       <Dialog open={!!editingService} onOpenChange={(o) => !o && setEditingService(null)}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Service</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Edit Service</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Name</Label>
-              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Base Price (₦)</Label>
-              <Input
-                type="number"
-                value={editPrice}
-                onChange={(e) => setEditPrice(Number(e.target.value))}
-              />
-            </div>
+            <div className="space-y-2"><Label>Name</Label><Input value={editName} onChange={(e) => setEditName(e.target.value)} /></div>
+            <div className="space-y-2"><Label>Description</Label><Textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} /></div>
+            <div className="space-y-2"><Label>Base Price (₦)</Label><Input type="number" value={editPrice} onChange={(e) => setEditPrice(Number(e.target.value))} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingService(null)}>Cancel</Button>
@@ -1595,33 +1272,15 @@ export default function AdminDashboard() {
       {/* Process Payout Dialog */}
       <Dialog open={!!selectedPayout} onOpenChange={(o) => !o && setSelectedPayout(null)}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Process Payout</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Process Payout</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
-            <p className="text-sm">
-              Pay <strong>₦{Number(selectedPayout?.amount || 0).toLocaleString()}</strong> to{' '}
-              <strong>{selectedPayout?.account_name}</strong> at{' '}
-              <strong>{selectedPayout?.bank_name}</strong> ({selectedPayout?.account_number})
-            </p>
-            <div className="space-y-2">
-              <Label>Admin Notes</Label>
-              <Textarea
-                placeholder="Optional notes about this payout..."
-                value={payoutNotes}
-                onChange={(e) => setPayoutNotes(e.target.value)}
-              />
-            </div>
+            <p className="text-sm">Pay <strong>₦{Number(selectedPayout?.amount || 0).toLocaleString()}</strong> to <strong>{selectedPayout?.account_name}</strong> at <strong>{selectedPayout?.bank_name}</strong> ({selectedPayout?.account_number})</p>
+            <div className="space-y-2"><Label>Admin Notes</Label><Textarea placeholder="Optional notes about this payout..." value={payoutNotes} onChange={(e) => setPayoutNotes(e.target.value)} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSelectedPayout(null)}>Cancel</Button>
-            <Button
-              className="bg-green-600 hover:bg-green-700"
-              disabled={processingPayout}
-              onClick={() => handlePayoutAction(selectedPayout!.id, 'paid')}
-            >
-              {processingPayout ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-              Mark as Paid
+            <Button className="bg-green-600 hover:bg-green-700" disabled={processingPayout} onClick={() => handlePayoutAction(selectedPayout!.id, 'paid')}>
+              {processingPayout ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />} Mark as Paid
             </Button>
           </DialogFooter>
         </DialogContent>
