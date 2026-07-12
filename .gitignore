@@ -68,6 +68,9 @@ Skillbridge/
 # Separate Skillbridge subproject (old app copy)
 Skillbridge/
 
+# Vite build timestamps
+*.timestamp-*.mjs
+
 # Temp / generated files
 Sample.jpg
 SkillBridge_Africa_Boxed_Wireframe.txt

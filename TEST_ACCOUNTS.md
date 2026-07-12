@@ -90,10 +90,4 @@
 | `/my-applications` | ❌ | ✅ | ❌ |
 
 
-
-Lets have a dashboard to cater for the firm and organisation that will be onboard on the platform, they will need premuim business function (B2B and B2A)to harness the best out of the platform and make good impact and profit out of the platform. you will act now as a analyzer, reseacher, product engineer and customer success persornal, imploy other agent where necessary and see how this feature will a success. create for plans, sprints, findings and prompts in the achieve folder to be refrenced during the mini project.
-
-
-On the admin page lets be able to view users and their profiles too
-And we should be able to add or delete service too
-Lets also have AI power some aspects of the admin back, check for things AI should power and implement them
+supabase Access token: sbp_6ba9c759c43b5549d8d528a9ee3afd3b86d11a6f
