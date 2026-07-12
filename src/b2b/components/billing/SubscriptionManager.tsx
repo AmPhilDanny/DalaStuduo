@@ -3,8 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Check, X, CreditCard, FileText, History, ArrowRight, Sparkles } from 'lucide-react';
+import { Loader2, Check, X, CreditCard, FileText, History, ArrowRight, Sparkles, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { useOrg } from '../../hooks/useOrg';
 import { useSubscription } from '../../hooks/useSubscription';
 import {
@@ -26,6 +27,7 @@ export default function SubscriptionManager() {
   const [history, setHistory] = useState<BillingHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [changingPlan, setChangingPlan] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
 
   const fetch = useCallback(async () => {
     try {
@@ -45,9 +47,22 @@ export default function SubscriptionManager() {
     }
   }, []);
 
+  // Fetch org verification status
+  useEffect(() => {
+    if (!org?.id) return;
+    supabase
+      .from('org_verifications')
+      .select('status')
+      .eq('org_id', org.id)
+      .maybeSingle()
+      .then(({ data }) => setVerificationStatus(data?.status || 'not_submitted'))
+      .catch(() => setVerificationStatus('not_submitted'));
+  }, [org?.id]);
+
   useEffect(() => { fetch(); }, [fetch]);
 
   const canChange = role === 'owner' || role === 'admin';
+  const isVerified = verificationStatus === 'verified';
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-purple-600" /></div>;
@@ -73,6 +88,17 @@ export default function SubscriptionManager() {
         </TabsList>
 
         <TabsContent value="plans" className="mt-4">
+          {verificationStatus !== 'verified' && canChange && (
+            <div className="mb-4 p-4 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-3">
+              <ShieldAlert className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-800">
+                <p className="font-medium">Business verification required</p>
+                <p>Your organization must be verified before you can upgrade to a paid plan.{' '}
+                  <a href="/b2b/compliance" className="underline font-medium hover:text-amber-900">Submit verification</a>
+                </p>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {plans.map(plan => {
               const isCurrent = currentPlan?.id === plan.id || (plan.slug === 'free' && !currentPlan);
@@ -107,7 +133,7 @@ export default function SubscriptionManager() {
                     <Button
                       className="mt-6 w-full"
                       variant={isCurrent ? 'outline' : isFree ? 'outline' : 'default'}
-                      disabled={isCurrent || !canChange}
+                      disabled={isCurrent || !canChange || (!isVerified && !isFree)}
                       onClick={async () => {
                         if (isFree || isCurrent) return;
                         setChangingPlan(true);

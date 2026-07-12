@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Palette, Globe, Image, Save } from 'lucide-react';
+import { Loader2, Palette, Globe, Image, Save, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { getBranding, updateBranding, type OrgBranding } from '../../lib/api';
 
 export default function BrandingSettings() {
@@ -171,20 +172,9 @@ export default function BrandingSettings() {
         <TabsContent value="advanced" className="space-y-4 mt-4">
           <Card>
             <CardHeader><CardTitle className="text-sm">Logos & Assets</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label>Logo URL</Label>
-                <Input value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://..." className="mt-1" />
-              </div>
-              <div>
-                <Label>Favicon URL</Label>
-                <Input value={faviconUrl} onChange={e => setFaviconUrl(e.target.value)} placeholder="https://..." className="mt-1" />
-              </div>
-              {logoUrl && (
-                <div className="mt-2 p-3 rounded border bg-gray-50 inline-block">
-                  <img src={logoUrl} alt="Logo preview" className="max-h-12" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                </div>
-              )}
+            <CardContent className="space-y-4">
+              <BrandUploadField label="Logo" value={logoUrl} onChange={setLogoUrl} />
+              <BrandUploadField label="Favicon" value={faviconUrl} onChange={setFaviconUrl} />
             </CardContent>
           </Card>
           <Card>
@@ -195,6 +185,52 @@ export default function BrandingSettings() {
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function BrandUploadField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop() || 'png';
+      const path = `branding/${label.toLowerCase()}_${Date.now()}.${ext}`;
+      const { data, error } = await supabase.storage.from('public').upload(path, file, {
+        cacheControl: '3600', upsert: true,
+      });
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('public').getPublicUrl(data.path);
+      onChange(publicUrl);
+      toast.success(`${label} uploaded`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <Input value={value} onChange={e => onChange(e.target.value)} placeholder={`${label} URL`} className="text-sm" />
+        </div>
+        <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading} className="shrink-0">
+          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+        </Button>
+        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={handleFile} />
+      </div>
+      {value && (
+        <div className="mt-1 border rounded-lg overflow-hidden w-16 h-16 bg-muted/30 flex items-center justify-center">
+          <img src={value} alt={label} className="max-w-full max-h-full object-contain" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+        </div>
+      )}
     </div>
   );
 }

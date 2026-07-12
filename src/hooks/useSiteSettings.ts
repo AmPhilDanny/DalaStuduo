@@ -132,7 +132,7 @@ export function useSiteSettings() {
     async function fetchConfig() {
       try {
         const { data, error } = await supabase
-          .from('site_settings')
+          .from('platform_config')
           .select('value')
           .eq('key', 'site_config')
           .single();

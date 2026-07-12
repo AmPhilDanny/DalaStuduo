@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,13 +11,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Users, Briefcase, DollarSign, AlertTriangle, CheckCircle, TrendingUp, Search, Plus, Pencil, Trash2, Eye, Palette, Shield, Activity } from 'lucide-react';
+import {
+  Loader2, Users, Briefcase, DollarSign, AlertTriangle, CheckCircle, TrendingUp,
+  Search, Plus, Pencil, Trash2, Eye, Palette, Shield, Activity, LayoutDashboard,
+  Settings, ChevronLeft, ChevronRight, SlidersHorizontal, FileText, Sparkles,
+} from 'lucide-react';
 import { toast } from 'sonner';
-import type { AdminStats, AdminUser, AdminService, ChatBubbleStyle } from '@/lib/marketplace';
-import { DEFAULT_BUBBLE_STYLE } from '@/lib/marketplace';
-import { getAdminStats, getAdminUsers, updateUserRole, getAdminServices, createAdminService, updateAdminService, deleteAdminService, getAdminSettings, updateAdminSetting, adminAiInsight } from '@/lib/marketplace';
+import type { AdminStats, AdminUser, AdminService } from '@/lib/marketplace';
+import { getAdminStats, getAdminUsers, updateUserRole, getAdminServices, createAdminService, updateAdminService, deleteAdminService, adminAiInsight, updateUserProfile, getAdminUser } from '@/lib/marketplace';
+import AdminConfig from '@/components/admin/AdminConfig';
+import SiteSettingsEditor from '@/components/admin/SiteSettingsEditor';
+import PageEditor from '@/components/admin/PageEditor';
+import SubscriptionPlansEditor from '@/components/admin/SubscriptionPlansEditor';
+import AdminVerificationPanel from '@/components/admin/AdminVerificationPanel';
 
-type TabValue = 'overview' | 'users' | 'services' | 'settings';
+type TabValue = 'overview' | 'users' | 'services' | 'pages' | 'plans' | 'verification' | 'settings' | 'config';
 
 interface StatsCard {
   label: string;
@@ -36,9 +43,21 @@ const STAT_COLORS = {
 
 const ROLE_OPTIONS = ['student', 'firm', 'admin'] as const;
 
+const NAV_ITEMS: { value: TabValue; label: string; icon: React.ReactNode }[] = [
+  { value: 'overview', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
+  { value: 'users', label: 'Users', icon: <Users className="w-4 h-4" /> },
+  { value: 'services', label: 'Services', icon: <Briefcase className="w-4 h-4" /> },
+  { value: 'pages', label: 'Pages', icon: <FileText className="w-4 h-4" /> },
+  { value: 'plans', label: 'Plans', icon: <Sparkles className="w-4 h-4" /> },
+  { value: 'verification', label: 'Verification', icon: <Shield className="w-4 h-4" /> },
+  { value: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
+  { value: 'config', label: 'Configuration', icon: <SlidersHorizontal className="w-4 h-4" /> },
+];
+
 export default function AdminDashboard() {
   const { user, profile, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [activeTab, setActiveTab] = useState<TabValue>('overview');
 
@@ -53,11 +72,13 @@ export default function AdminDashboard() {
   const [usersCount, setUsersCount] = useState(0);
   const [usersLoading, setUsersLoading] = useState(true);
   const [userSearch, setUserSearch] = useState('');
-  const [userRoleFilter, setUserRoleFilter] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
   const [userPage, setUserPage] = useState(0);
-  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
-  const [userSummary, setUserSummary] = useState('');
-  const [userSummaryLoading, setUserSummaryLoading] = useState(false);
+  const [profileUser, setProfileUser] = useState<AdminUser | null>(null);
+  const [profileDialog, setProfileDialog] = useState(false);
+  const [profileForm, setProfileForm] = useState({ full_name: '', company_name: '', bio: '', avatar_url: '' });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
   const pageSize = 15;
 
   // Services
@@ -69,15 +90,10 @@ export default function AdminDashboard() {
   const [serviceSaving, setServiceSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // Settings
-  const [bubbleStyle, setBubbleStyle] = useState<ChatBubbleStyle>(DEFAULT_BUBBLE_STYLE);
-  const [settingsLoading, setSettingsLoading] = useState(true);
-  const [savingBubble, setSavingBubble] = useState(false);
-
   useEffect(() => {
     if (authLoading) return;
     if (!user || profile?.role !== 'admin') {
-      navigate('/auth');
+      navigate('/auth?redirectTo=/admin');
     }
   }, [user, profile, authLoading, navigate]);
 
@@ -89,7 +105,6 @@ export default function AdminDashboard() {
       .then((s) => {
         setStats(s);
         setStatsLoading(false);
-        // Load AI insight
         setAiLoading(true);
         adminAiInsight('admin_metric_insight', {
           totalUsers: String(s.total_users),
@@ -111,7 +126,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (activeTab !== 'users' || !user) return;
     setUsersLoading(true);
-    getAdminUsers({ search: userSearch || undefined, role: userRoleFilter || undefined, limit: pageSize, offset: userPage * pageSize })
+    getAdminUsers({ search: userSearch || undefined, role: userRoleFilter && userRoleFilter !== 'all' ? userRoleFilter : undefined, limit: pageSize, offset: userPage * pageSize })
       .then((res) => {
         setUsers(res.data);
         setUsersCount(res.count);
@@ -131,19 +146,6 @@ export default function AdminDashboard() {
       .then(setServices)
       .catch(() => toast.error('Failed to load services'))
       .finally(() => setServicesLoading(false));
-  }, [activeTab, user]);
-
-  // Load settings
-  useEffect(() => {
-    if (activeTab !== 'settings' || !user) return;
-    setSettingsLoading(true);
-    getAdminSettings()
-      .then((settings) => {
-        const s = settings?.chat_bubble_style as ChatBubbleStyle | undefined;
-        if (s?.my_bubble_bg && s?.other_bubble_bg) setBubbleStyle(s);
-        setSettingsLoading(false);
-      })
-      .catch(() => setSettingsLoading(false));
   }, [activeTab, user]);
 
   function getStatCards(s: AdminStats): StatsCard[] {
@@ -166,19 +168,47 @@ export default function AdminDashboard() {
       .catch(() => toast.error('Failed to update role'));
   }
 
-  function viewUserSummary(u: AdminUser) {
-    setSelectedUser(u);
-    setUserSummaryLoading(true);
-    setUserSummary('');
-    adminAiInsight('admin_user_summary', {
-      userName: u.full_name || 'Unknown',
-      userRole: u.role,
-      skills: '',
-      context: 'Admin panel user detail view',
-    })
-      .then(setUserSummary)
-      .catch(() => setUserSummary('Could not generate summary'))
-      .finally(() => setUserSummaryLoading(false));
+  function openUserProfile(u: AdminUser) {
+    setProfileLoading(true);
+    setProfileDialog(true);
+    getAdminUser(u.id)
+      .then((full) => {
+        setProfileUser(full);
+        setProfileForm({
+          full_name: full.full_name || '',
+          company_name: full.company_name || '',
+          bio: full.bio || '',
+          avatar_url: full.avatar_url || '',
+        });
+        setProfileLoading(false);
+      })
+      .catch(() => {
+        // Fallback to table data if API fails
+        setProfileUser(u);
+        setProfileForm({
+          full_name: u.full_name || '',
+          company_name: u.company_name || '',
+          bio: u.bio || '',
+          avatar_url: u.avatar_url || '',
+        });
+        setProfileLoading(false);
+      });
+  }
+
+  async function handleProfileSave() {
+    if (!profileUser) return;
+    setProfileSaving(true);
+    try {
+      const updated = await updateUserProfile(profileUser.id, profileForm);
+      toast.success('Profile updated');
+      setProfileUser(updated);
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)));
+      setProfileDialog(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update profile');
+    } finally {
+      setProfileSaving(false);
+    }
   }
 
   function openServiceDialog(svc?: AdminService) {
@@ -225,14 +255,6 @@ export default function AdminDashboard() {
       .catch(() => toast.error('Failed to delete service'));
   }
 
-  function handleSaveBubbleColors() {
-    setSavingBubble(true);
-    updateAdminSetting('chat_bubble_style', bubbleStyle)
-      .then(() => toast.success('Bubble colors saved'))
-      .catch(() => toast.error('Failed to save colors'))
-      .finally(() => setSavingBubble(false));
-  }
-
   async function handleGenerateDescription() {
     if (!serviceForm.name) {
       toast.error('Enter a service name first');
@@ -261,79 +283,115 @@ export default function AdminDashboard() {
   if (!user || profile?.role !== 'admin') return null;
 
   return (
-    <div className="min-h-screen pt-24 pb-12 px-4">
-      <div className="container mx-auto max-w-7xl">
-        <div className="flex items-center gap-3 mb-8">
-          <Shield className="w-8 h-8 text-secondary" />
-          <div>
-            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-            <p className="text-muted-foreground text-sm">Platform management & settings</p>
-          </div>
+    <div className="min-h-screen flex pt-16">
+      {/* Sidebar */}
+      <aside
+        className={`fixed left-0 top-16 h-[calc(100vh-4rem)] bg-gray-900 text-white flex flex-col transition-all duration-300 z-30 ${
+          sidebarOpen ? 'w-56' : 'w-14'
+        }`}
+      >
+        <div className="flex items-center justify-between px-3 py-4 border-b border-gray-700/50">
+          {sidebarOpen && (
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-purple-400" />
+              <span className="text-sm font-semibold">Admin Panel</span>
+            </div>
+          )}
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+          >
+            {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
-          <TabsList className="mb-8">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <Activity className="w-4 h-4" /> Overview
-            </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center gap-2">
-              <Users className="w-4 h-4" /> Users
-            </TabsTrigger>
-            <TabsTrigger value="services" className="flex items-center gap-2">
-              <Briefcase className="w-4 h-4" /> Services
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-2">
-              <Palette className="w-4 h-4" /> Settings
-            </TabsTrigger>
-          </TabsList>
+        <nav className="flex-1 py-4 space-y-1 px-2">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.value}
+              onClick={() => setActiveTab(item.value)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                activeTab === item.value
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              {item.icon}
+              {sidebarOpen && <span>{item.label}</span>}
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-3 border-t border-gray-700/50">
+          {sidebarOpen && (
+            <p className="text-[10px] text-gray-500 text-center">
+              SkillBridge Admin
+            </p>
+          )}
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'ml-56' : 'ml-14'}`}>
+        <div className="px-6 py-8">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-8">
+            <Shield className="w-8 h-8 text-purple-600" />
+            <div>
+              <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+              <p className="text-muted-foreground text-sm">Platform management & settings</p>
+            </div>
+          </div>
 
           {/* ═══ OVERVIEW TAB ═══ */}
-          <TabsContent value="overview">
-            {statsLoading ? (
-              <div className="flex justify-center py-24"><Loader2 className="w-8 h-8 animate-spin text-secondary" /></div>
-            ) : stats ? (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                  {getStatCards(stats).map((card) => (
-                    <Card key={card.label} className={`border-l-4 ${STAT_COLORS[card.color]} shadow-sm`}>
-                      <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">{card.label}</CardTitle>
-                        <span className="text-muted-foreground">{card.icon}</span>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-3xl font-bold">{card.value}</div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+          {activeTab === 'overview' && (
+            <>
+              {statsLoading ? (
+                <div className="flex justify-center py-24"><Loader2 className="w-8 h-8 animate-spin text-secondary" /></div>
+              ) : stats ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                    {getStatCards(stats).map((card) => (
+                      <Card key={card.label} className={`border-l-4 ${STAT_COLORS[card.color]} shadow-sm`}>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                          <CardTitle className="text-sm font-medium text-muted-foreground">{card.label}</CardTitle>
+                          <span className="text-muted-foreground">{card.icon}</span>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-3xl font-bold">{card.value}</div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
 
-                {/* AI Insights */}
-                <Card className="border-l-4 border-l-blue-500">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Activity className="w-5 h-5 text-blue-500" /> AI Insights
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {aiLoading ? (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Analyzing metrics...
-                      </div>
-                    ) : aiInsight ? (
-                      <p className="text-sm text-muted-foreground">{aiInsight}</p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">AI insights unavailable. Configure an AI provider in Settings.</p>
-                    )}
-                  </CardContent>
-                </Card>
-              </>
-            ) : (
-              <p className="text-center py-24 text-muted-foreground">Failed to load stats.</p>
-            )}
-          </TabsContent>
+                  {/* AI Insights */}
+                  <Card className="border-l-4 border-l-blue-500">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Activity className="w-5 h-5 text-blue-500" /> AI Insights
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {aiLoading ? (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Analyzing metrics...
+                        </div>
+                      ) : aiInsight ? (
+                        <p className="text-sm text-muted-foreground">{aiInsight}</p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">AI insights unavailable. Configure an AI provider in Settings.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </>
+              ) : (
+                <p className="text-center py-24 text-muted-foreground">Failed to load stats.</p>
+              )}
+            </>
+          )}
 
           {/* ═══ USERS TAB ═══ */}
-          <TabsContent value="users">
+          {activeTab === 'users' && (
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex flex-col md:flex-row md:items-center gap-4">
@@ -353,7 +411,7 @@ export default function AdminDashboard() {
                         <SelectValue placeholder="All roles" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All roles</SelectItem>
+                        <SelectItem value="all">All roles</SelectItem>
                         {ROLE_OPTIONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -406,7 +464,7 @@ export default function AdminDashboard() {
                                 {u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}
                               </TableCell>
                               <TableCell>
-                                <Button variant="ghost" size="icon-sm" onClick={() => viewUserSummary(u)} title="View profile summary">
+                                <Button variant="ghost" size="icon-sm" onClick={() => openUserProfile(u)} title="View / edit profile">
                                   <Eye className="w-4 h-4" />
                                 </Button>
                               </TableCell>
@@ -416,7 +474,6 @@ export default function AdminDashboard() {
                       </TableBody>
                     </Table>
 
-                    {/* Pagination */}
                     {usersCount > pageSize && (
                       <div className="flex items-center justify-between pt-4">
                         <p className="text-xs text-muted-foreground">
@@ -432,250 +489,228 @@ export default function AdminDashboard() {
                 )}
               </CardContent>
             </Card>
-
-            {/* User Summary Dialog */}
-            <Dialog open={!!selectedUser} onOpenChange={(o) => { if (!o) setSelectedUser(null); }}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Avatar className="w-6 h-6">
-                      <AvatarImage src={selectedUser?.avatar_url || undefined} />
-                      <AvatarFallback>{(selectedUser?.full_name || '?').charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    {selectedUser?.full_name || 'User Profile'}
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div><span className="text-muted-foreground">Role:</span> <Badge variant="secondary">{selectedUser?.role}</Badge></div>
-                    <div><span className="text-muted-foreground">Joined:</span> {selectedUser?.created_at ? new Date(selectedUser.created_at).toLocaleDateString() : '-'}</div>
-                    {selectedUser?.company_name && <div className="col-span-2"><span className="text-muted-foreground">Company:</span> {selectedUser.company_name}</div>}
-                    {selectedUser?.bio && <div className="col-span-2"><span className="text-muted-foreground">Bio:</span> {selectedUser.bio}</div>}
-                  </div>
-                  <div className="border-t pt-3">
-                    <p className="text-xs font-medium text-muted-foreground mb-2">AI Summary</p>
-                    {userSummaryLoading ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-3 h-3 animate-spin" /> Generating...</div>
-                    ) : (
-                      <p className="text-sm">{userSummary || 'No summary available.'}</p>
-                    )}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </TabsContent>
+          )}
 
           {/* ═══ SERVICES TAB ═══ */}
-          <TabsContent value="services">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">Services</CardTitle>
-                  <Button size="sm" onClick={() => openServiceDialog()}>
-                    <Plus className="w-4 h-4 mr-1" /> Add Service
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {servicesLoading ? (
-                  <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-secondary" /></div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Slug</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead className="text-right">Base Price</TableHead>
-                        <TableHead>Active</TableHead>
-                        <TableHead className="w-[100px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {services.length === 0 ? (
-                        <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-12">No services yet</TableCell></TableRow>
-                      ) : (
-                        services.map((svc) => (
-                          <TableRow key={svc.id}>
-                            <TableCell className="font-medium">{svc.name}</TableCell>
-                            <TableCell className="text-sm text-muted-foreground">{svc.slug}</TableCell>
-                            <TableCell><Badge variant="outline">{svc.category}</Badge></TableCell>
-                            <TableCell className="text-right">${Number(svc.base_price).toLocaleString()}</TableCell>
-                            <TableCell>
-                              <Badge variant={svc.is_active ? 'default' : 'secondary'}>{svc.is_active ? 'Active' : 'Inactive'}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-1">
-                                <Button variant="ghost" size="icon-sm" onClick={() => openServiceDialog(svc)} title="Edit">
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon-sm" onClick={() => setDeleteConfirm(svc.id)} title="Delete">
-                                  <Trash2 className="w-4 h-4 text-destructive" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Add/Edit Service Dialog */}
-            <Dialog open={serviceDialog} onOpenChange={setServiceDialog}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{editingService ? 'Edit Service' : 'Add Service'}</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-2">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Name *</Label>
-                      <Input value={serviceForm.name} onChange={(e) => setServiceForm((p) => ({ ...p, name: e.target.value }))} placeholder="Web Development" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Slug *</Label>
-                      <Input value={serviceForm.slug} onChange={(e) => setServiceForm((p) => ({ ...p, slug: e.target.value }))} placeholder="web-development" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Category *</Label>
-                      <Input value={serviceForm.category} onChange={(e) => setServiceForm((p) => ({ ...p, category: e.target.value }))} placeholder="Development" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Base Price</Label>
-                      <Input type="number" value={serviceForm.base_price} onChange={(e) => setServiceForm((p) => ({ ...p, base_price: Number(e.target.value) }))} />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Description</Label>
-                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={handleGenerateDescription}>
-                        ✨ AI Generate
-                      </Button>
-                    </div>
-                    <Textarea value={serviceForm.description} onChange={(e) => setServiceForm((p) => ({ ...p, description: e.target.value }))} rows={3} placeholder="Service description..." />
-                  </div>
-                  <div className="flex justify-end gap-3 pt-2">
-                    <Button variant="outline" onClick={() => setServiceDialog(false)}>Cancel</Button>
-                    <Button onClick={handleServiceSave} disabled={serviceSaving}>
-                      {serviceSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-                      {editingService ? 'Update' : 'Create'}
+          {activeTab === 'services' && (
+            <>
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Services</CardTitle>
+                    <Button size="sm" onClick={() => openServiceDialog()}>
+                      <Plus className="w-4 h-4 mr-1" /> Add Service
                     </Button>
                   </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </CardHeader>
+                <CardContent>
+                  {servicesLoading ? (
+                    <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-secondary" /></div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Slug</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead className="text-right">Base Price</TableHead>
+                          <TableHead>Active</TableHead>
+                          <TableHead className="w-[100px]">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {services.length === 0 ? (
+                          <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-12">No services yet</TableCell></TableRow>
+                        ) : (
+                          services.map((svc) => (
+                            <TableRow key={svc.id}>
+                              <TableCell className="font-medium">{svc.name}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{svc.slug}</TableCell>
+                              <TableCell><Badge variant="outline">{svc.category}</Badge></TableCell>
+                              <TableCell className="text-right">${Number(svc.base_price).toLocaleString()}</TableCell>
+                              <TableCell>
+                                <Badge variant={svc.is_active ? 'default' : 'secondary'}>{svc.is_active ? 'Active' : 'Inactive'}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  <Button variant="ghost" size="icon-sm" onClick={() => openServiceDialog(svc)} title="Edit">
+                                    <Pencil className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon-sm" onClick={() => setDeleteConfirm(svc.id)} title="Delete">
+                                    <Trash2 className="w-4 h-4 text-destructive" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
 
-            {/* Delete Confirm */}
-            <Dialog open={!!deleteConfirm} onOpenChange={(o) => { if (!o) setDeleteConfirm(null); }}>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Delete Service?</DialogTitle></DialogHeader>
-                <p className="text-sm text-muted-foreground">This action cannot be undone. All listings using this service will remain but the service will be removed.</p>
-                <div className="flex justify-end gap-3">
-                  <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
-                  <Button variant="destructive" onClick={() => deleteConfirm && handleDeleteService(deleteConfirm)}>Delete</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </TabsContent>
-
-          {/* ═══ SETTINGS TAB ═══ */}
-          <TabsContent value="settings">
-            {settingsLoading ? (
-              <div className="flex justify-center py-24"><Loader2 className="w-8 h-8 animate-spin text-secondary" /></div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Chat Bubble Colors */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Palette className="w-5 h-5 text-secondary" /> Chat Bubble Colors
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-5">
-                    {/* Preview */}
-                    <div className="space-y-3 mb-4 p-4 bg-muted/30 rounded-lg">
-                      <p className="text-xs font-medium text-muted-foreground">Preview</p>
-                      <div className="flex flex-col gap-2">
-                        <div className="flex justify-end">
-                          <div className="max-w-[70%] px-3 py-2 rounded-2xl rounded-br-md text-sm" style={{ backgroundColor: bubbleStyle.my_bubble_bg, color: bubbleStyle.my_bubble_text }}>
-                            My message looks like this
-                          </div>
-                        </div>
-                        <div className="flex justify-start">
-                          <div className="max-w-[70%] px-3 py-2 rounded-2xl rounded-bl-md text-sm" style={{ backgroundColor: bubbleStyle.other_bubble_bg, color: bubbleStyle.other_bubble_text }}>
-                            Their message looks like this
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
+              {/* Add/Edit Service Dialog */}
+              <Dialog open={serviceDialog} onOpenChange={setServiceDialog}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>{editingService ? 'Edit Service' : 'Add Service'}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>My Bubble Background</Label>
-                        <div className="flex gap-2 items-center">
-                          <input type="color" value={bubbleStyle.my_bubble_bg} onChange={(e) => setBubbleStyle((p) => ({ ...p, my_bubble_bg: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border" />
-                          <Input value={bubbleStyle.my_bubble_bg} onChange={(e) => setBubbleStyle((p) => ({ ...p, my_bubble_bg: e.target.value }))} className="font-mono text-xs flex-1" />
-                        </div>
+                        <Label>Name *</Label>
+                        <Input value={serviceForm.name} onChange={(e) => setServiceForm((p) => ({ ...p, name: e.target.value }))} placeholder="Web Development" />
                       </div>
                       <div className="space-y-2">
-                        <Label>My Bubble Text</Label>
-                        <div className="flex gap-2 items-center">
-                          <input type="color" value={bubbleStyle.my_bubble_text} onChange={(e) => setBubbleStyle((p) => ({ ...p, my_bubble_text: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border" />
-                          <Input value={bubbleStyle.my_bubble_text} onChange={(e) => setBubbleStyle((p) => ({ ...p, my_bubble_text: e.target.value }))} className="font-mono text-xs flex-1" />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Other Bubble Background</Label>
-                        <div className="flex gap-2 items-center">
-                          <input type="color" value={bubbleStyle.other_bubble_bg} onChange={(e) => setBubbleStyle((p) => ({ ...p, other_bubble_bg: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border" />
-                          <Input value={bubbleStyle.other_bubble_bg} onChange={(e) => setBubbleStyle((p) => ({ ...p, other_bubble_bg: e.target.value }))} className="font-mono text-xs flex-1" />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Other Bubble Text</Label>
-                        <div className="flex gap-2 items-center">
-                          <input type="color" value={bubbleStyle.other_bubble_text} onChange={(e) => setBubbleStyle((p) => ({ ...p, other_bubble_text: e.target.value }))} className="w-10 h-10 rounded cursor-pointer border" />
-                          <Input value={bubbleStyle.other_bubble_text} onChange={(e) => setBubbleStyle((p) => ({ ...p, other_bubble_text: e.target.value }))} className="font-mono text-xs flex-1" />
-                        </div>
+                        <Label>Slug *</Label>
+                        <Input value={serviceForm.slug} onChange={(e) => setServiceForm((p) => ({ ...p, slug: e.target.value }))} placeholder="web-development" />
                       </div>
                     </div>
-                    <Button onClick={handleSaveBubbleColors} disabled={savingBubble} className="w-full">
-                      {savingBubble ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                      Save Bubble Colors
-                    </Button>
-                  </CardContent>
-                </Card>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Category *</Label>
+                        <Input value={serviceForm.category} onChange={(e) => setServiceForm((p) => ({ ...p, category: e.target.value }))} placeholder="Development" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Base Price</Label>
+                        <Input type="number" value={serviceForm.base_price} onChange={(e) => setServiceForm((p) => ({ ...p, base_price: Number(e.target.value) }))} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Description</Label>
+                        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={handleGenerateDescription}>
+                          AI Generate
+                        </Button>
+                      </div>
+                      <Textarea value={serviceForm.description} onChange={(e) => setServiceForm((p) => ({ ...p, description: e.target.value }))} rows={3} placeholder="Service description..." />
+                    </div>
+                    <div className="flex justify-end gap-3 pt-2">
+                      <Button variant="outline" onClick={() => setServiceDialog(false)}>Cancel</Button>
+                      <Button onClick={handleServiceSave} disabled={serviceSaving}>
+                        {serviceSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                        {editingService ? 'Update' : 'Create'}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
 
-                {/* AI Provider Info */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Activity className="w-5 h-5 text-secondary" /> AI Provider
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      AI features are powered by the configured provider in the <code className="text-xs bg-muted px-1 py-0.5 rounded">ai-assist</code> edge function.
-                      API keys are set via Supabase secrets or the <code className="text-xs bg-muted px-1 py-0.5 rounded">site_settings</code> table.
-                    </p>
-                    <div className="text-sm">
-                      <p><span className="text-muted-foreground">Provider:</span> <Badge variant="secondary">OpenRouter (default)</Badge></p>
-                      <p className="mt-1"><span className="text-muted-foreground">Model:</span> <Badge variant="outline">google/gemini-2.0-flash-001</Badge></p>
+              {/* Delete Confirm */}
+              <Dialog open={!!deleteConfirm} onOpenChange={(o) => { if (!o) setDeleteConfirm(null); }}>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Delete Service?</DialogTitle></DialogHeader>
+                  <p className="text-sm text-muted-foreground">This action cannot be undone. All listings using this service will remain but the service will be removed.</p>
+                  <div className="flex justify-end gap-3">
+                    <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+                    <Button variant="destructive" onClick={() => deleteConfirm && handleDeleteService(deleteConfirm)}>Delete</Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </>
+          )}
+
+          {/* ═══ PAGES TAB ═══ */}
+          {activeTab === 'pages' && (
+            <PageEditor />
+          )}
+
+          {/* ═══ PLANS TAB ═══ */}
+          {activeTab === 'plans' && (
+            <SubscriptionPlansEditor />
+          )}
+
+          {/* ═══ VERIFICATION TAB ═══ */}
+          {activeTab === 'verification' && (
+            <AdminVerificationPanel />
+          )}
+
+          {/* ═══ CONFIGURATION TAB ═══ */}
+          {activeTab === 'config' && (
+            <AdminConfig />
+          )}
+
+          {/* ═══ SETTINGS TAB ═══ */}
+          {activeTab === 'settings' && (
+            <SiteSettingsEditor />
+          )}
+
+          {/* ═══ USER PROFILE DIALOG ═══ */}
+          <Dialog open={profileDialog} onOpenChange={(o) => { if (!o) setProfileDialog(false); }}>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  {profileUser && (
+                    <Avatar className="w-8 h-8">
+                      <AvatarImage src={profileUser.avatar_url || undefined} />
+                      <AvatarFallback>{(profileUser.full_name || '?').charAt(0)}</AvatarFallback>
+                    </Avatar>
+                  )}
+                  <span>{profileUser?.full_name || 'User Profile'}</span>
+                  {profileUser && <Badge variant="outline">{profileUser.role}</Badge>}
+                </DialogTitle>
+              </DialogHeader>
+
+              {profileLoading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-secondary" />
+                </div>
+              ) : (
+                <div className="space-y-4 py-2">
+                  <div className="space-y-2">
+                    <Label>Full Name</Label>
+                    <Input
+                      value={profileForm.full_name}
+                      onChange={(e) => setProfileForm((p) => ({ ...p, full_name: e.target.value }))}
+                      placeholder="User's full name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Company / Organization</Label>
+                    <Input
+                      value={profileForm.company_name}
+                      onChange={(e) => setProfileForm((p) => ({ ...p, company_name: e.target.value }))}
+                      placeholder="Company name (if applicable)"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Avatar URL</Label>
+                    <Input
+                      value={profileForm.avatar_url}
+                      onChange={(e) => setProfileForm((p) => ({ ...p, avatar_url: e.target.value }))}
+                      placeholder="https://example.com/avatar.jpg"
+                      className="font-mono text-xs"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Bio</Label>
+                    <Textarea
+                      value={profileForm.bio}
+                      onChange={(e) => setProfileForm((p) => ({ ...p, bio: e.target.value }))}
+                      placeholder="User biography / description"
+                      rows={3}
+                    />
+                  </div>
+                  {profileUser && (
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground pt-2 border-t">
+                      <span>ID: <code className="bg-muted px-1 rounded">{profileUser.id.slice(0, 8)}…</code></span>
+                      <span>Joined: {new Date(profileUser.created_at).toLocaleDateString()}</span>
+                      <span>Updated: {new Date(profileUser.updated_at).toLocaleDateString()}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      To change the AI provider, set <code className="text-xs bg-muted px-1">AI_PROVIDER</code> and the corresponding API key via Supabase secrets.
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+                  )}
+                  <div className="flex justify-end gap-3 pt-2">
+                    <Button variant="outline" onClick={() => setProfileDialog(false)}>Cancel</Button>
+                    <Button onClick={handleProfileSave} disabled={profileSaving}>
+                      {profileSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                      Save Changes
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
     </div>
   );

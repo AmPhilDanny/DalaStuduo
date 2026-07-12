@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { useEffect, lazy, Suspense } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Toaster } from "@/components/ui/sonner";
@@ -26,7 +26,6 @@ import Wallet from "@/pages/Wallet";
 import MyListings from "@/pages/MyListings";
 import OrderDetail from "@/pages/OrderDetail";
 import Messages from "@/pages/Messages";
-import AdminDashboard from "@/pages/AdminDashboard";
 import Disputes from "@/pages/Disputes";
 import DisputeDetail from "@/pages/DisputeDetail";
 import Connections from "@/pages/Connections";
@@ -45,6 +44,25 @@ import SubscriptionManager from "@/b2b/components/billing/SubscriptionManager";
 import SettingsPage from "@/b2b/components/settings/SettingsPage";
 import InviteAccept from "@/b2b/pages/InviteAccept";
 import { OrgProvider } from "@/b2b/hooks/useOrg";
+import About from "@/pages/About";
+import Faq from "@/pages/Faq";
+import Contact from "@/pages/Contact";
+import Terms from "@/pages/Terms";
+import Privacy from "@/pages/Privacy";
+import Onboarding from "@/pages/Onboarding";
+import Programs from "@/pages/Programs";
+import CustomPage from "@/pages/CustomPage";
+import JsonLd from "@/components/seo/JsonLd";
+import TourOverlay from "@/components/onboarding/Tour";
+import { Loader2 } from "lucide-react";
+
+const Playground = lazy(() => import("@/pages/Playground"));
+const GitSettings = lazy(() => import("@/pages/GitSettings"));
+
+function AdminRedirect() {
+  window.location.href = 'http://localhost:4000/';
+  return null;
+}
 
 function MetaUpdater() {
   const { config } = useSiteSettings();
@@ -85,63 +103,95 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <MetaUpdater />
-        <div className="min-h-screen bg-background text-foreground selection:bg-secondary/30 selection:text-primary">
-          <Navbar />
-          <main>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/jobs" element={<Jobs />} />
-              <Route path="/talent" element={<Talent />} />
-              <Route path="/talent/:id" element={<Profile />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/projects" element={<Projects />} />
-              <Route path="/projects/:id" element={<ProjectDetail />} />
-              <Route path="/my-applications" element={<MyApplications />} />
-              <Route path="/tutor" element={<Tutor />} />
-              <Route path="/tutor/:id" element={<TutorChat />} />
-              <Route path="/dashboard" element={<UserDashboard />} />
-              <Route path="/dashboard/org" element={<OrgDashboard />} />
-              <Route path="/jobs/new" element={<PostJob />} />
-              <Route path="/marketplace" element={<Marketplace />} />
-              <Route path="/marketplace/new" element={<CreateListing />} />
-              <Route path="/marketplace/:id" element={<MarketplaceDetail />} />
-              <Route path="/orders" element={<MyOrders />} />
-              <Route path="/orders/:id" element={<OrderDetail />} />
-              <Route path="/wallet" element={<Wallet />} />
-              <Route path="/my-listings" element={<MyListings />} />
-              <Route path="/messages" element={<Messages />} />
-              <Route path="/connections" element={<Connections />} />
-              <Route path="/disputes" element={<Disputes />} />
-              <Route path="/disputes/:id" element={<DisputeDetail />} />
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/b2b/setup" element={<OrgSetup />} />
-              <Route path="/b2b/invite/accept" element={<InviteAccept />} />
-              <Route path="/b2b" element={
-                <OrgProvider>
-                  <B2BLayout />
-                </OrgProvider>
-              }>
-                <Route index element={<B2BDashboard />} />
-                <Route path="dashboard" element={<B2BDashboard />} />
-                <Route path="team" element={<TeamList />} />
-                <Route path="talent" element={<TalentSearch />} />
-                <Route path="talent/lists" element={<TalentListManager />} />
-                <Route path="hiring" element={<BulkJobPost />} />
-                <Route path="hiring/pipeline" element={<PipelineView />} />
-                <Route path="contracts" element={<ContractList />} />
-                <Route path="compliance" element={<ComplianceDashboard />} />
-                <Route path="analytics" element={<AnalyticsDashboard />} />
-                <Route path="settings" element={<SettingsPage />} />
-              </Route>
-            </Routes>
-          </main>
-          <Footer />
-          <Toaster />
-        </div>
+        <AppContent />
       </Router>
     </AuthProvider>
+  );
+}
+
+function AppContent() {
+  const location = useLocation();
+  const isAdmin = location.pathname.startsWith('/admin');
+
+  return (
+    <>
+      <MetaUpdater />
+      <JsonLd />
+      <TourOverlay />
+      <div className="min-h-screen bg-background text-foreground selection:bg-secondary/30 selection:text-primary">
+        <Navbar />
+        <main>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/programs" element={<Programs />} />
+            <Route path="/programs/:id" element={<Programs />} />
+            <Route path="/jobs" element={<Jobs />} />
+            <Route path="/talent" element={<Talent />} />
+            <Route path="/talent/:id" element={<Profile />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/projects" element={<Projects />} />
+            <Route path="/projects/:id" element={<ProjectDetail />} />
+            <Route path="/my-applications" element={<MyApplications />} />
+            <Route path="/tutor" element={<Tutor />} />
+            <Route path="/tutor/:id" element={<TutorChat />} />
+            <Route path="/dashboard" element={<UserDashboard />} />
+            <Route path="/dashboard/org" element={<Navigate to="/b2b/dashboard" replace />} />
+            <Route path="/jobs/new" element={<PostJob />} />
+            <Route path="/marketplace" element={<Marketplace />} />
+            <Route path="/marketplace/new" element={<CreateListing />} />
+            <Route path="/marketplace/:id" element={<MarketplaceDetail />} />
+            <Route path="/orders" element={<MyOrders />} />
+            <Route path="/orders/:id" element={<OrderDetail />} />
+            <Route path="/wallet" element={<Wallet />} />
+            <Route path="/my-listings" element={<MyListings />} />
+            <Route path="/playground" element={
+              <Suspense fallback={<div className="min-h-screen pt-20 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-purple-600" /></div>}>
+                <Playground />
+              </Suspense>
+            } />
+            <Route path="/settings/github" element={
+              <Suspense fallback={<div className="min-h-screen pt-20 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-purple-600" /></div>}>
+                <GitSettings />
+              </Suspense>
+            } />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/connections" element={<Connections />} />
+            <Route path="/disputes" element={<Disputes />} />
+            <Route path="/disputes/:id" element={<DisputeDetail />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/faq" element={<Faq />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/page/:slug" element={<CustomPage />} />
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/admin" element={<AdminRedirect />} />
+            <Route path="/b2b/setup" element={<OrgSetup />} />
+            <Route path="/b2b/invite/accept" element={<InviteAccept />} />
+            <Route path="/b2b" element={
+              <OrgProvider>
+                <B2BLayout />
+              </OrgProvider>
+            }>
+              <Route index element={<B2BDashboard />} />
+              <Route path="dashboard" element={<B2BDashboard />} />
+              <Route path="team" element={<TeamList />} />
+              <Route path="talent" element={<TalentSearch />} />
+              <Route path="talent/lists" element={<TalentListManager />} />
+              <Route path="hiring" element={<BulkJobPost />} />
+              <Route path="hiring/pipeline" element={<PipelineView />} />
+              <Route path="contracts" element={<ContractList />} />
+              <Route path="compliance" element={<ComplianceDashboard />} />
+              <Route path="analytics" element={<AnalyticsDashboard />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Route>
+          </Routes>
+        </main>
+        {!isAdmin && <Footer />}
+        <Toaster />
+      </div>
+    </>
   );
 }
 

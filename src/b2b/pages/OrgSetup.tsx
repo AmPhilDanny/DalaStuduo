@@ -17,13 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Building2, Loader2, Check, ArrowRight, ArrowLeft, Users, Sparkles } from 'lucide-react';
+import { Building2, Loader2, Check, ArrowRight, ArrowLeft, Users, Sparkles, Shield, UserPlus, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
 const STEPS = [
   { title: 'Company Info', description: 'Tell us about your organization' },
-  { title: 'Team', description: 'Set up your team (optional)' },
-  { title: 'Launch', description: 'You\'re all set!' },
+  { title: 'Team', description: 'Invite your first team members' },
+  { title: 'Review', description: 'Verify and launch' },
 ];
 
 const INDUSTRIES = [
@@ -45,6 +45,8 @@ export default function OrgSetup() {
     description: '',
     website_url: '',
   });
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [invitees, setInvitees] = useState<string[]>([]);
 
   const updateField = (field: string, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -80,8 +82,20 @@ export default function OrgSetup() {
     return true;
   };
 
+  const addInvitee = () => {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) { toast.error('Enter a valid email'); return; }
+    if (invitees.includes(email)) { toast.error('Already added'); return; }
+    setInvitees(prev => [...prev, email]);
+    setInviteEmail('');
+  };
+
+  const removeInvitee = (email: string) => {
+    setInvitees(prev => prev.filter(e => e !== email));
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white flex items-center justify-center p-4">
+    <div className="min-h-screen pt-16 bg-gradient-to-b from-purple-50 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
         {/* Steps indicator */}
         <div className="flex items-center justify-center gap-2 mb-8">
@@ -176,28 +190,60 @@ export default function OrgSetup() {
             )}
 
             {step === 1 && (
-              <div className="text-center py-6 space-y-4">
-                <Users className="w-12 h-12 text-purple-600 mx-auto" />
-                <div>
-                  <p className="text-sm text-gray-600">
-                    You can invite team members after setting up your organization.
-                  </p>
-                  <p className="text-xs text-gray-400 mt-2">
-                    Go to Team settings from the dashboard to send invitations.
-                  </p>
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <Label>Invite team members via email</Label>
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        value={inviteEmail}
+                        onChange={e => setInviteEmail(e.target.value)}
+                        placeholder="colleague@company.com"
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addInvitee(); } }}
+                      />
+                      <Button variant="outline" onClick={addInvitee} type="button" className="shrink-0">
+                        <Mail className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
+                {invitees.length > 0 && (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Invited ({invitees.length})</Label>
+                    {invitees.map(email => (
+                      <div key={email} className="flex items-center justify-between p-2 rounded bg-muted/50 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-3 h-3 text-muted-foreground" />
+                          {email}
+                        </div>
+                        <button onClick={() => removeInvitee(email)} className="text-destructive hover:text-destructive/80 text-xs font-medium">Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  You can also invite more people later from the Team settings page.
+                </p>
               </div>
             )}
 
             {step === 2 && (
-              <div className="text-center py-6 space-y-4">
-                <Sparkles className="w-12 h-12 text-purple-600 mx-auto" />
+              <div className="text-center py-4 space-y-4">
+                <Sparkles className="w-10 h-10 text-purple-600 mx-auto" />
                 <div>
                   <p className="font-medium text-gray-900">Ready to launch!</p>
                   <p className="text-sm text-gray-500 mt-1">
-                    Your organization "{form.name || 'Untitled'}" will be created with the Free plan.
-                    You can upgrade anytime.
+                    Your organization <strong>"{form.name || 'Untitled'}"</strong> will be created with the Free plan.
                   </p>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-left text-sm text-amber-800">
+                  <div className="flex items-start gap-2">
+                    <Shield className="w-4 h-4 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-medium text-xs">Next step: Business verification</p>
+                      <p className="text-xs mt-1">After setup, verify your business from the Compliance tab to unlock paid subscriptions and all features.</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

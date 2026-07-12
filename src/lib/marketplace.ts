@@ -1491,6 +1491,22 @@ export async function updateUserRole(userId: string, role: string): Promise<Admi
   return data;
 }
 
+export async function updateUserProfile(
+  userId: string,
+  fields: { full_name?: string; company_name?: string; avatar_url?: string; bio?: string }
+): Promise<AdminUser> {
+  const { data } = await adminFetch<{ data: AdminUser }>(`/admin/users/${userId}/profile`, {
+    method: 'PATCH',
+    body: JSON.stringify(fields),
+  });
+  return data;
+}
+
+export async function getAdminUser(userId: string): Promise<AdminUser> {
+  const { data } = await adminFetch<{ data: AdminUser }>(`/admin/users/${userId}`);
+  return data;
+}
+
 export async function getAdminDisputes(status?: string): Promise<AdminDispute[]> {
   const qs = status ? `?status=${status}` : '';
   const { data } = await adminFetch<{ data: AdminDispute[] }>(`/admin/disputes${qs}`);

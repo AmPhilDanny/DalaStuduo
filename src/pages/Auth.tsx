@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,8 @@ export default function Auth() {
   const [role, setRole] = useState<'student' | 'firm'>('student');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirectTo') || '/';
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,14 +47,30 @@ export default function Auth() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) throw error;
+      
+      // Check if user is an admin
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single();
+          
+        if (profile?.role === 'admin' || profile?.role === 'super_admin') {
+          toast.success('Successfully signed in! Redirecting to admin panel...');
+          window.location.href = 'http://localhost:4000/';
+          return;
+        }
+      }
+
       toast.success('Successfully signed in!');
-      navigate('/');
+      navigate(redirectTo);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error signing in');
     } finally {
