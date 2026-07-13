@@ -1,9 +1,7 @@
-// ============================================================
 // GitHub OAuth helpers — connect, getToken, disconnect
-// Token is stored in the `github_connections` Supabase table
-// ============================================================
+// Routes through the Express backend API
 
-import { supabase } from '@/integrations/supabase/client';
+import { githubApi } from '@/lib/api-client';
 
 export interface GitHubConnection {
   id: string;
@@ -15,55 +13,27 @@ export interface GitHubConnection {
   created_at: string;
 }
 
-/**
- * Exchange a GitHub OAuth code for an access token via a Supabase edge function,
- * then store it encrypted in github_connections.
- */
 export async function connectGitHub(code: string): Promise<GitHubConnection> {
-  const { data, error } = await supabase.functions.invoke('github-oauth', {
-    body: { action: 'connect', code },
-  });
-
-  if (error) throw new Error(error.message);
-  return data.connection;
+  const res = await githubApi.connect(code);
+  return res.data;
 }
 
-/** Retrieve the current user's GitHub access token (decrypted server-side) */
 export async function getGitHubToken(): Promise<string | null> {
-  const { data, error } = await supabase.functions.invoke('github-oauth', {
-    body: { action: 'get_token' },
-  });
-
-  if (error || !data?.token) return null;
-  return data.token;
+  const res = await githubApi.getToken();
+  return res.data?.token ?? null;
 }
 
-/** Disconnect GitHub — removes token and connection record */
 export async function disconnectGitHub(): Promise<void> {
-  const { error } = await supabase.functions.invoke('github-oauth', {
-    body: { action: 'disconnect' },
-  });
-
-  if (error) throw new Error(error.message);
+  await githubApi.disconnect();
 }
 
-/** Get the current user's GitHub connection metadata (no token) */
 export async function getGitHubConnection(): Promise<GitHubConnection | null> {
-  const { data, error } = await supabase
-    .from('github_connections')
-    .select('id, user_id, github_id, github_login, github_avatar_url, github_url, created_at')
-    .maybeSingle();
-
-  if (error || !data) return null;
-  return data;
+  const res = await githubApi.getConnection();
+  return res.data ?? null;
 }
 
-/** Get the GitHub OAuth URL from the edge function to initiate the flow */
 export async function getGitHubOAuthUrl(): Promise<string> {
-  const { data, error } = await supabase.functions.invoke('github-oauth', {
-    body: { action: 'get_url' },
-  });
-
-  if (error || !data?.url) throw new Error(error.message || 'Failed to get OAuth URL');
-  return data.url;
+  const res = await githubApi.getUrl();
+  if (!res.data?.url) throw new Error('Failed to get OAuth URL');
+  return res.data.url;
 }

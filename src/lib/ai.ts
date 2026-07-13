@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { aiApi } from '@/lib/api-client';
 
 export type AIMode = 'cv_revamp' | 'cover_letter' | 'skill_gap' | 'project_polish';
 
@@ -93,42 +93,15 @@ export interface KnowledgeBaseEntry {
   updated_at: string;
 }
 
-/** Calls the `ai-assist` edge function for career tools (cv, cover letter, etc.). */
 export async function callAIAssist(payload: AIAssistPayload): Promise<string> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-
-  if (!token) {
-    throw new Error('Please sign in to use AI assist.');
-  }
-
-  const { data, error } = await supabase.functions.invoke('ai-assist', {
-    body: payload,
-  });
-
-  if (error) throw new Error(error.message || 'AI request failed');
-  if (data?.error) throw new Error(data.error);
-  return data?.result || '';
+  const res = await aiApi.assist(payload);
+  return res.data?.result || '';
 }
 
 export async function callTutorAI(payload: TutorPayload): Promise<string | TutorQuizResult> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-
-  if (!token) {
-    throw new Error('Please sign in to use AI Tutor.');
-  }
-
-  const { data, error } = await supabase.functions.invoke('ai-assist', {
-    body: payload,
-  });
-
-  if (error) throw new Error(error.message || 'AI Tutor request failed');
-  if (data?.error) throw new Error(data.error);
-
-  // tutor_grade returns structured data, others return { result: "..." }
+  const res = await aiApi.assist(payload);
   if (payload.mode === 'tutor_grade') {
-    return data as TutorQuizResult;
+    return res.data as TutorQuizResult;
   }
-  return data?.result || '';
+  return res.data?.result || '';
 }

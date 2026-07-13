@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { marketplaceApi, paymentsApi, walletApi, messagingApi, notificationsApi, aiApi, adminApi, get, post, patch, del } from '@/lib/api-client';
 
 export interface Notification {
   id: string;
@@ -86,20 +87,8 @@ export interface Payout {
 // ── Listings ──
 
 export async function getServices(): Promise<Service[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-listings/services`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to fetch services');
-  }
-  const json = await res.json();
-  return json.data || [];
+  const res = await marketplaceApi.services();
+  return res.data || [];
 }
 
 export async function getListings(params?: {
@@ -112,49 +101,23 @@ export async function getListings(params?: {
   page?: number;
   limit?: number;
 }): Promise<{ listings: MarketplaceListing[]; count: number; page: number; limit: number }> {
-  const searchParams = new URLSearchParams();
-  if (params?.status) searchParams.set('status', params.status);
-  if (params?.category) searchParams.set('category', params.category);
-  if (params?.search) searchParams.set('search', params.search);
-  if (params?.minPrice !== undefined) searchParams.set('min_price', String(params.minPrice));
-  if (params?.maxPrice !== undefined) searchParams.set('max_price', String(params.maxPrice));
-  if (params?.sort) searchParams.set('sort', params.sort);
-  if (params?.page) searchParams.set('page', String(params.page));
-  if (params?.limit) searchParams.set('limit', String(params.limit));
+  const apiParams: Record<string, string | number | boolean | undefined> = {};
+  if (params?.status) apiParams.status = params.status;
+  if (params?.category) apiParams.category = params.category;
+  if (params?.search) apiParams.search = params.search;
+  if (params?.minPrice !== undefined) apiParams.min_price = params.minPrice;
+  if (params?.maxPrice !== undefined) apiParams.max_price = params.maxPrice;
+  if (params?.sort) apiParams.sort = params.sort;
+  if (params?.page) apiParams.page = params.page;
+  if (params?.limit) apiParams.limit = params.limit;
 
-  const qs = searchParams.toString();
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(
-    `${supabaseUrl}/functions/v1/marketplace-listings${qs ? `?${qs}` : ''}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to fetch listings');
-  }
-  const json = await res.json();
-  return { listings: json.data || [], count: json.count || 0, page: json.page || 1, limit: json.limit || 20 };
+  const res = await marketplaceApi.listings(apiParams);
+  return { listings: res.data || [], count: res.count || 0, page: res.page || 1, limit: res.limit || 20 };
 }
 
 export async function getListing(id: string): Promise<MarketplaceListing> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-listings/listings/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to fetch listing');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await marketplaceApi.getListing(id);
+  return res.data;
 }
 
 export async function createListing(body: {
@@ -164,22 +127,8 @@ export async function createListing(body: {
   service_id: string;
   duration_hours: number;
 }): Promise<MarketplaceListing> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-listings/listings`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to create listing');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await marketplaceApi.createListing(body);
+  return res.data;
 }
 
 // ── Orders ──
@@ -190,64 +139,23 @@ export async function getOrders(params?: {
   limit?: number;
   offset?: number;
 }): Promise<Order[]> {
-  const searchParams = new URLSearchParams();
-  if (params?.role) searchParams.set('role', params.role);
-  if (params?.status) searchParams.set('status', params.status);
-  if (params?.limit) searchParams.set('limit', String(params.limit));
-  if (params?.offset) searchParams.set('offset', String(params.offset));
-
-  const qs = searchParams.toString();
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(
-    `${supabaseUrl}/functions/v1/marketplace-orders${qs ? `?${qs}` : ''}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to fetch orders');
-  }
-  const json = await res.json();
-  return json.data || [];
+  const apiParams: Record<string, string | number | boolean | undefined> = {};
+  if (params?.role) apiParams.role = params.role;
+  if (params?.status) apiParams.status = params.status;
+  if (params?.limit) apiParams.limit = params.limit;
+  if (params?.offset) apiParams.offset = params.offset;
+  const res = await marketplaceApi.orders(apiParams);
+  return res.data || [];
 }
 
 export async function getOrder(id: string): Promise<Order> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/orders/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to fetch order');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await marketplaceApi.getOrder(id);
+  return res.data;
 }
 
 export async function createOrder(listing_id: string): Promise<Order> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/orders`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ listing_id }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to create order');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await marketplaceApi.createOrder(listing_id);
+  return res.data;
 }
 
 export async function updateOrderStatus(
@@ -255,22 +163,8 @@ export async function updateOrderStatus(
   status: string,
   extra?: { rating?: number; review?: string }
 ): Promise<Order> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/orders/${orderId}`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status, ...extra }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to update order');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await marketplaceApi.updateOrder(orderId, { status, ...extra });
+  return res.data;
 }
 
 // ── Payment Types ──
@@ -298,113 +192,35 @@ export interface PaymentInitResult {
 // ── Payment API ──
 
 export async function initializePayment(orderId: string, gateway?: string): Promise<PaymentInitResult> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-payments/payments/initialize`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ order_id: orderId, gateway }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Payment initialization failed');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await paymentsApi.initialize(orderId, gateway);
+  return res.data;
 }
 
 export async function verifyPaystackPayment(reference: string): Promise<{ status: string; order_id: string }> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-payments/payments/verify/paystack`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reference }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Payment verification failed');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await paymentsApi.verify('paystack', { reference: reference });
+  return res.data;
 }
 
 export async function verifyFlutterwavePayment(transactionId: string): Promise<{ status: string; order_id: string }> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-payments/payments/verify/flutterwave`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ transaction_id: transactionId }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Payment verification failed');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await paymentsApi.verify('flutterwave', { transaction_id: transactionId });
+  return res.data;
 }
 
 export async function releaseMilestonePayment(milestoneId: string): Promise<{ released: boolean; amount: number }> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-payments/payments/release-milestone`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ milestone_id: milestoneId }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Milestone release failed');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await paymentsApi.releaseMilestone(milestoneId);
+  return res.data;
 }
 
 export async function releaseEscrow(orderId: string): Promise<{ released: boolean; amount: number; fee: number }> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-payments/payments/release/${orderId}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Escrow release failed');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await paymentsApi.release(orderId);
+  return res.data;
 }
 
 // ── Wallet & Payouts ──
 
 export async function getWalletBalance(): Promise<WalletBalance> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/wallet-payouts/wallet/balance`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to fetch balance');
-  const json = await res.json();
-  return json.data;
+  const res = await walletApi.balance();
+  return res.data;
 }
 
 export async function getWalletTransactions(params?: {
@@ -412,38 +228,17 @@ export async function getWalletTransactions(params?: {
   limit?: number;
   offset?: number;
 }): Promise<WalletTransaction[]> {
-  const searchParams = new URLSearchParams();
-  if (params?.type) searchParams.set('type', params.type);
-  if (params?.limit) searchParams.set('limit', String(params.limit));
-  if (params?.offset) searchParams.set('offset', String(params.offset));
-  const qs = searchParams.toString();
-
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(
-    `${supabaseUrl}/functions/v1/wallet-payouts/wallet/transactions${qs ? `?${qs}` : ''}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  if (!res.ok) throw new Error('Failed to fetch transactions');
-  const json = await res.json();
-  return json.data;
+  const apiParams: Record<string, string | number | boolean | undefined> = {};
+  if (params?.type) apiParams.type = params.type;
+  if (params?.limit) apiParams.limit = params.limit;
+  if (params?.offset) apiParams.offset = params.offset;
+  const res = await walletApi.transactions(apiParams);
+  return res.data || [];
 }
 
 export async function getPayouts(): Promise<Payout[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/wallet-payouts/payouts`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to fetch payouts');
-  const json = await res.json();
-  return json.data;
+  const res = await walletApi.payouts();
+  return res.data || [];
 }
 
 // ── Reviews ──
@@ -471,181 +266,60 @@ export interface ListingRating {
 }
 
 export async function getListingRating(listingId: string): Promise<ListingRating> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-reviews/reviews/listing/${listingId}/stats`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    return { average: 0, count: 0 };
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await marketplaceApi.listingReviewStats(listingId);
+  return res.data;
 }
 
 export async function getListingReviews(listingId: string): Promise<ListingReview[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-reviews/reviews/listing/${listingId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to fetch reviews');
-  const json = await res.json();
-  return json.data || [];
+  const res = await marketplaceApi.listingReviews(listingId);
+  return res.data || [];
 }
 
 export async function getProviderReviews(providerId: string): Promise<ProviderReview[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-reviews/reviews/provider/${providerId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to fetch provider reviews');
-  const json = await res.json();
-  return json.data || [];
+  const res = await marketplaceApi.providerReviews(providerId);
+  return res.data || [];
 }
 
 export async function getProviderRating(providerId: string): Promise<ListingRating> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-reviews/reviews/provider/${providerId}/stats`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return { average: 0, count: 0 };
-  const json = await res.json();
-  return json.data;
+  const res = await marketplaceApi.providerReviewStats(providerId);
+  return res.data;
 }
 
 export async function updateReview(orderId: string, rating?: number, review?: string): Promise<void> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-reviews/reviews/orders/${orderId}`, {
-    method: 'PUT',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rating, review }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to update review');
-  }
+  const res = await marketplaceApi.updateReview(orderId, { rating, review });
+  return res.data;
 }
 
 export async function deleteReview(orderId: string): Promise<void> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-reviews/reviews/orders/${orderId}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to delete review');
-  }
+  const res = await marketplaceApi.deleteReview(orderId);
+  return res.data;
 }
 
 export async function submitReview(orderId: string, rating: number, review: string): Promise<void> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-reviews/reviews/orders/${orderId}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rating, review }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to submit review');
-  }
+  const res = await marketplaceApi.submitReview(orderId, body);
+  return res.data;
 }
 
 // ── Payments ──
 
 export async function detectCurrency(): Promise<{ code: string; symbol: string; name: string }> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  try {
-    const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-payments/payments/detect-currency`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return { code: 'NGN', symbol: '\u20A6', name: 'Nigerian Naira' };
-    const json = await res.json();
-    return json.data;
-  } catch {
-    return { code: 'NGN', symbol: '\u20A6', name: 'Nigerian Naira' };
-  }
+  const res = await paymentsApi.detectCurrency();
+  return res.data;
 }
 
 export async function getPaymentGateways(): Promise<Record<string, { public_key: string; secret_key: string; enabled: boolean }>> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-payments/payments/gateways`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return {};
-  const json = await res.json();
-  return json.data;
+  const res = await paymentsApi.gateways();
+  return res.data;
 }
 
 export async function getServiceFee(): Promise<number> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) return 5;
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  try {
-    const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-payments/payments/service-fee`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return 5;
-    const json = await res.json();
-    return json.data?.percentage || 5;
-  } catch {
-    return 5;
-  }
+  const res = await paymentsApi.serviceFee();
+  return res.data;
 }
 
 export async function releasePayment(orderId: string): Promise<{ released: boolean; amount: number; fee: number }> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-payments/payments/release/${orderId}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Release failed');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await paymentsApi.release(orderId);
+  return res.data;
 }
 
 // ── Messaging ──
@@ -682,50 +356,18 @@ export interface Message {
 }
 
 export async function createConversation(other_participant_id: string, order_id?: string): Promise<Conversation> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/messaging/conversations`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ other_participant_id, order_id: order_id || null }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to create conversation');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await messagingApi.createConversation(other_participant_id, order_id);
+  return res.data;
 }
 
 export async function getConversations(): Promise<Conversation[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/messaging/conversations`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to fetch conversations');
-  const json = await res.json();
-  return json.data || [];
+  const res = await messagingApi.conversations();
+  return res.data || [];
 }
 
 export async function getMessages(conversationId: string): Promise<Message[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/messaging/conversations/${conversationId}/messages`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to fetch messages');
-  const json = await res.json();
-  return json.data || [];
+  const res = await messagingApi.getMessages(conversationId);
+  return res.data || [];
 }
 
 export async function sendMessage(
@@ -733,22 +375,8 @@ export async function sendMessage(
   content: string,
   attachments?: Array<{ storage_path: string; file_name: string; file_size: number; mime_type: string }>
 ): Promise<Message> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/messaging/conversations/${conversationId}/messages`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, attachments }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to send message');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await messagingApi.sendMessage(conversationId, { content, attachments });
+  return res.data;
 }
 
 export async function uploadChatAttachment(
@@ -797,71 +425,27 @@ export interface OrderMilestone {
 }
 
 export async function getMilestones(orderId: string): Promise<OrderMilestone[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/orders/${orderId}/milestones`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to fetch milestones');
-  }
-  const json = await res.json();
-  return json.data || [];
+  const res = await marketplaceApi.getMilestones(orderId);
+  return res.data || [];
 }
 
 export async function createMilestone(
   orderId: string,
   data: { title: string; description?: string; amount: number; due_date?: string }
 ): Promise<OrderMilestone> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/orders/${orderId}/milestones`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to create milestone');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await marketplaceApi.createMilestone(orderId, data);
+  return res.data;
 }
 
 export async function updateMilestoneStatus(milestoneId: string, status: string): Promise<OrderMilestone> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  // We need the orderId — fetch milestone first to get it
   const { data: msData } = await supabase
     .from('order_milestones')
     .select('order_id')
     .eq('id', milestoneId)
     .single();
-
   if (!msData) throw new Error('Milestone not found');
-  const orderId = msData.order_id;
-
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/orders/${orderId}/milestones/${milestoneId}`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to update milestone');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await marketplaceApi.updateMilestone(msData.order_id, milestoneId, { status });
+  return res.data;
 }
 
 // ── Provider Availability ──
@@ -1006,73 +590,23 @@ export const DISPUTE_STATUS_CONFIG: Record<string, { label: string; color: strin
 };
 
 export async function getMyDisputes(): Promise<Dispute[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/disputes`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to fetch disputes');
-  }
-  const json = await res.json();
-  return json.data || [];
+  const res = await marketplaceApi.disputes();
+  return res.data || [];
 }
 
 export async function getDispute(disputeId: string): Promise<Dispute> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/disputes/${disputeId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to fetch dispute');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await marketplaceApi.getDispute(disputeId);
+  return res.data;
 }
 
 export async function getDisputeMessages(disputeId: string): Promise<DisputeMessage[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/disputes/${disputeId}/messages`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to fetch messages');
-  }
-  const json = await res.json();
-  return json.data || [];
+  const res = await marketplaceApi.getDisputeMessages(disputeId);
+  return res.data || [];
 }
 
 export async function sendDisputeMessage(disputeId: string, message: string): Promise<DisputeMessage> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-orders/disputes/${disputeId}/messages`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to send message');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await marketplaceApi.sendDisputeMessage(disputeId, message);
+  return res.data;
 }
 
 // ── Currency Format Helpers ──
@@ -1098,19 +632,8 @@ export function formatPrice(amount: number, currencyCode = 'NGN'): string {
 }
 
 export async function deleteListing(id: string): Promise<void> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-listings/listings/${id}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to delete listing');
-  }
+  const res = await marketplaceApi.deleteListing(id);
+  return res.data;
 }
 
 export async function requestPayout(body: {
@@ -1119,87 +642,37 @@ export async function requestPayout(body: {
   account_number: string;
   account_name: string;
 }): Promise<Payout> {
-  const { data, error } = await supabase.functions.invoke('wallet-payouts', {
-    method: 'POST',
-    body,
-  });
-  if (error) throw new Error(error.message);
-  return data?.data;
+  const res = await walletApi.requestPayout(body);
+  return res.data;
 }
 
 // ── Notifications ──
 
 export async function getNotifications(unreadOnly = false): Promise<Notification[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const qs = unreadOnly ? '?unread=true' : '';
-  const res = await fetch(`${supabaseUrl}/functions/v1/notifications/notifications${qs}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to fetch notifications');
-  const json = await res.json();
-  return json.data || [];
+  const res = await notificationsApi.list({ unread: unreadOnly });
+  return res.data || [];
 }
 
 export async function getUnreadCount(): Promise<number> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) return 0;
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  try {
-    const res = await fetch(`${supabaseUrl}/functions/v1/notifications/notifications/unread-count`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return 0;
-    const json = await res.json();
-    return json.count || 0;
-  } catch {
-    return 0;
-  }
+  const res = await notificationsApi.unreadCount();
+  return res.data;
 }
 
 export async function markNotificationRead(id: string): Promise<void> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  await fetch(`${supabaseUrl}/functions/v1/notifications/notifications/${id}/read`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await notificationsApi.markRead(id);
+  return res.data;
 }
 
 export async function markAllNotificationsRead(): Promise<void> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  await fetch(`${supabaseUrl}/functions/v1/notifications/notifications/read-all`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await notificationsApi.markAllRead();
+  return res.data;
 }
 
 // ── My Listings ──
 
 export async function getMyListings(): Promise<MarketplaceListing[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-listings/listings?mine=true`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to fetch your listings');
-  const json = await res.json();
-  return json.data || [];
+  const res = await marketplaceApi.listings({ mine: true });
+  return res.data || [];
 }
 
 // ── Provider Stats ──
@@ -1412,56 +885,22 @@ export async function adminAiInsight(
   mode: 'admin_metric_insight' | 'admin_user_summary' | 'admin_service_description',
   params: Record<string, string>
 ): Promise<string> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-
-  const body: Record<string, unknown> = { mode };
-  // Map generic params to the ai-assist field names
-  if (params.totalUsers !== undefined) body.bio = params.totalUsers;
-  if (params.totalOrders !== undefined) body.jobTitle = params.totalOrders;
-  if (params.completedOrders !== undefined) body.jobDescription = params.completedOrders;
-  if (params.totalRevenue !== undefined) body.applicantSummary = params.totalRevenue;
-  if (params.userName !== undefined) body.bio = params.userName;
-  if (params.userRole !== undefined) body.jobTitle = params.userRole;
-  if (params.userHeadline !== undefined) body.jobDescription = params.userHeadline;
-  if (params.skills !== undefined) body.currentSkills = params.skills.split(',').map(s => s.trim());
-  if (params.serviceName !== undefined) body.bio = params.serviceName;
-  if (params.serviceCategory !== undefined) body.jobTitle = params.serviceCategory;
-  if (params.currentDescription !== undefined) body.rawDescription = params.currentDescription;
-  if (params.context !== undefined) body.targetTitle = params.context;
-
-  const res = await fetch(`${supabaseUrl}/functions/v1/ai-assist`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error('AI assist request failed');
-  const json = await res.json();
-  return json.result || '';
+  const body = { mode, ...params };
+  const res = await aiApi.assist(body);
+  return res.data;
 }
 
 // ── Admin API ──
 
 async function adminFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/admin-api${path}`, {
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    ...options,
-  });
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => null);
-    throw new Error(errBody?.error || `Admin API request failed: ${res.statusText}`);
-  }
-  if (res.status === 204) return undefined as T;
-  const json = await res.json();
-  return json;
+  const method = (options?.method || 'GET').toLowerCase();
+  const body = options?.body ? JSON.parse(options.body as string) : undefined;
+  if (method === 'get' || method === '') return get<T>(path);
+  if (method === 'post') return post<T>(path, body);
+  if (method === 'patch') return patch<T>(path, body);
+  if (method === 'put') return put<T>(path, body);
+  if (method === 'delete') return del<T>(path);
+  throw new Error(`Unsupported method: ${method}`);
 }
 
 export async function getAdminStats(): Promise<AdminStats> {
@@ -1599,16 +1038,8 @@ export interface ProviderBankAccount {
 // ── Manual Payment API ──
 
 export async function getOfflinePaymentConfig(): Promise<OfflinePaymentConfig | null> {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) return null;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-payments/payments/offline-config`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return null;
-  const json = await res.json();
-  return json.data;
+  const res = await paymentsApi.offlineConfig();
+  return res.data;
 }
 
 export async function initiateManualPayment(
@@ -1616,37 +1047,13 @@ export async function initiateManualPayment(
   screenshotUrl: string,
   notes?: string
 ): Promise<ManualPayment> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-payments/payments/manual`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ order_id: orderId, screenshot_url: screenshotUrl, notes }),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to submit manual payment');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await paymentsApi.manualPayment(body);
+  return res.data;
 }
 
 export async function getManualPayments(orderId?: string): Promise<ManualPayment[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const qs = orderId ? `?order_id=${orderId}` : '';
-  const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-payments/payments/manual${qs}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error('Failed to fetch manual payments');
-  const json = await res.json();
-  return json.data;
+  const res = await paymentsApi.getManualPayments({ order_id: orderId });
+  return res.data || [];
 }
 
 export async function uploadPaymentScreenshot(file: File): Promise<string> {
@@ -1672,20 +1079,8 @@ export async function uploadPaymentScreenshot(file: File): Promise<string> {
 // ── Provider Bank Account API ──
 
 export async function getProviderBankAccount(): Promise<ProviderBankAccount | null> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/wallet-payouts/bank-account`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    if (res.status === 404) return null;
-    throw new Error('Failed to fetch bank account');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await walletApi.bankAccount();
+  return res.data;
 }
 
 export async function saveProviderBankAccount(details: {
@@ -1696,27 +1091,8 @@ export async function saveProviderBankAccount(details: {
   swift_code?: string;
   country?: string;
 }): Promise<ProviderBankAccount> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
-  const nameParts = details.account_name.trim().split(/\s+/);
-  if (nameParts.length < 2) {
-    throw new Error('Account name must include at least first and last name');
-  }
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/wallet-payouts/bank-account`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(details),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to save bank account');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await walletApi.saveBankAccount(details);
+  return res.data;
 }
 
 export async function uploadKycDocument(file: File): Promise<string> {
