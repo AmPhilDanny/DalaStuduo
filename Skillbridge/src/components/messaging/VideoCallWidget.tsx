@@ -1,0 +1,78 @@
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Video, Loader2 } from 'lucide-react';
+import CustomVideoCall from '@/components/messaging/CustomVideoCall';
+import { initCall, getCallHistory } from '@/b2b/lib/api';
+import { toast } from 'sonner';
+
+interface VideoCallWidgetProps {
+  conversationId?: string;
+  orderId?: string;
+  userName: string;
+  /** Optional: if true, shows a small icon button instead of full button */
+  compact?: boolean;
+}
+
+export default function VideoCallWidget({
+  conversationId,
+  orderId,
+  userName,
+  compact,
+}: VideoCallWidgetProps) {
+  const [callOpen, setCallOpen] = useState(false);
+  const [roomName, setRoomName] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+
+  const handleStartCall = async () => {
+    if (!conversationId && !orderId) return;
+    setStarting(true);
+    try {
+      // Check if there's an active call already
+      const history = await getCallHistory(conversationId, orderId);
+      const active = history.data?.find((c) => c.status === 'active');
+      if (active) {
+        setRoomName(active.room_name);
+        setCallOpen(true);
+        return;
+      }
+
+      // Init a new call
+      const result = await initCall(conversationId, orderId);
+      setRoomName(result.data.room_name);
+      setCallOpen(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to start video call');
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  return (
+    <>
+      <Button
+        onClick={handleStartCall}
+        disabled={starting}
+        variant={compact ? 'ghost' : 'default'}
+        size={compact ? 'icon' : 'default'}
+        className={compact ? 'h-9 w-9' : 'gap-1.5'}
+        title="Start video call"
+      >
+        {starting ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <Video className="w-4 h-4" />
+        )}
+        {!compact && (starting ? 'Starting...' : 'Video Call')}
+      </Button>
+
+      {roomName && (
+        <CustomVideoCall
+          open={callOpen}
+          onOpenChange={setCallOpen}
+          roomName={roomName}
+          userName={userName}
+        />
+      )}
+    </>
+  );
+}
