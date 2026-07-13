@@ -1356,27 +1356,12 @@ export async function saveProviderBankAccount(details: {
   swift_code?: string;
   country?: string;
 }): Promise<ProviderBankAccount> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) throw new Error('Please sign in');
-
   const nameParts = details.account_name.trim().split(/\s+/);
   if (nameParts.length < 2) {
     throw new Error('Account name must include at least first and last name');
   }
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const res = await fetch(`${supabaseUrl}/functions/v1/wallet-payouts/bank-account`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(details),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to save bank account');
-  }
-  const json = await res.json();
-  return json.data;
+  const res = await walletApi.saveBankAccount(details);
+  return res.data;
 }
 
 export async function uploadKycDocument(file: File): Promise<string> {
