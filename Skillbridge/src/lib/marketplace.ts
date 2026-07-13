@@ -892,15 +892,17 @@ export async function adminAiInsight(
 
 // ── Admin API ──
 
-async function adminFetch<T>(path: string, options?: RequestInit): Promise<{ data: T; [key: string]: any }> {
+async function adminFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const method = (options?.method || 'GET').toLowerCase();
   const body = options?.body ? JSON.parse(options.body as string) : undefined;
-  if (method === 'get' || method === '') return get<T>(path);
-  if (method === 'post') return post<T>(path, body);
-  if (method === 'patch') return patch<T>(path, body);
-  if (method === 'put') return put<T>(path, body);
-  if (method === 'delete') return del<T>(path);
-  throw new Error(`Unsupported method: ${method}`);
+  let res: { data: T; [key: string]: any };
+  if (method === 'get' || method === '') res = await get<T>(path);
+  else if (method === 'post') res = await post<T>(path, body);
+  else if (method === 'patch') res = await patch<T>(path, body);
+  else if (method === 'put') res = await put<T>(path, body);
+  else if (method === 'delete') res = await del<T>(path);
+  else throw new Error(`Unsupported method: ${method}`);
+  return res.data;
 }
 
 export async function getAdminStats(): Promise<AdminStats> {

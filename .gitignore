@@ -1,76 +1,72 @@
-# Dependencies
+# ── Dependencies ──
 node_modules/
 node_modules_old_*/
 
-# Environment variables
+# ── Environment variables ──
 .env
 .env.local
 .env.production
 
-# Build output
+# ── Build output ──
 dist/
 build/
 
-# IDE
+# ── IDE ──
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
+# ── OS ──
 .DS_Store
 Thumbs.db
 
-# Logs
+# ── Logs ──
 *.log
 npm-debug.log*
 build.log
 
-# Watch script artifact
+# ── Watch script artifact ──
 dala-internal-watch-build-errors.js
 
-# AI / Agent working directories
+# ── AI / Agent working directories ──
 .omo/
 .opencode/
 .codegraph/
 .playwright-mcp/
 
-# AI-generated scratch / temp files
+# ── AI-generated scratch / temp files ──
 fix.txt
 FIX_CONSTRAINTS.sql
 _combined_migration.sql
 FULL_MIGRATION.sql
 
-# AI-generated build prompts and plans (not source)
-docs/AGENT_BUILD_PROMPT.md
-
-# Supabase temp
-supabase/.temp/
-
-# AI agent artifacts, archived plans, findings, sprints
+# ── AI agent artifacts, archived plans, sprints ──
 archived/
 
-# Chat logs / session transcripts
+# ── Chat logs / session transcripts ──
 chat session.txt
 admin-console.log
 admin-err.log
 admin-out.log
 
-# TypeScript incremental build cache
+# ── TypeScript incremental build cache ──
 *.tsbuildinfo
 
-# Bun lockfile (project uses npm)
+# ── Bun lockfile (project uses npm) ──
 bun.lock
 
-# Separate Skillbridge subproject (old app copy)
-Skillbridge/
-
-# Separate Skillbridge subproject (old app copy)
-Skillbridge/
-
-# Vite build timestamps
+# ── Vite build timestamps / temp mjs ──
 *.timestamp-*.mjs
+*.mjs
 
-# Temp / generated files
+# ── Temp / generated files ──
 Sample.jpg
 SkillBridge_Africa_Boxed_Wireframe.txt
+TEST_ACCOUNTS.md
+
+# ── Supabase temp ──
+supabase/.temp/
+
+# ── Render / deployment ──
+.DS_Store
