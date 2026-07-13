@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { adminClient } from '../../lib/supabase-admin.js';
 import { AppError } from '../../middleware/error.js';
+import { requireAuth } from '../../middleware/auth.js';
 
 export const aiRouter: Router = Router();
 
@@ -234,6 +235,45 @@ async function handleTutorGrade(body: RequestBody): Promise<string> {
   const score = Math.round((correctCount / body.questions.length) * 100);
   return JSON.stringify({ score, correctCount, total: body.questions.length, results });
 }
+
+// ── GET /ai/providers — list all providers with their configured status ──
+aiRouter.get('/providers', async (_req: Request, res: Response) => {
+  const providers = getProviders();
+  const list = Object.entries(providers).map(([id, cfg]) => ({
+    id,
+    label: cfg.label,
+    configured: !!cfg.apiKey,
+    active: id === ACTIVE_PROVIDER,
+  }));
+  res.json({ data: list });
+});
+
+// ── POST /ai/test — test a provider's API key with a simple completion ──
+aiRouter.post('/test', requireAuth, async (req: Request, res: Response) => {
+  const { provider: raw } = req.body || {};
+  const providerId = (raw || ACTIVE_PROVIDER) as AiProvider;
+  const providers = getProviders();
+  const cfg = providers[providerId];
+  if (!cfg) {
+    res.status(400).json({ error: `Unknown provider "${providerId}"` });
+    return;
+  }
+  if (!cfg.apiKey) {
+    res.status(400).json({ error: `No API key configured for ${cfg.label}` });
+    return;
+  }
+  const response = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
+    body: JSON.stringify({ model: cfg.defaultModel, max_tokens: 10, messages: [{ role: 'user', content: 'Say "ok"' }] }),
+  });
+  if (!response.ok) {
+    const errText = await response.text().catch(() => 'unknown error');
+    res.status(502).json({ error: `${cfg.label} returned ${response.status}: ${errText.slice(0, 200)}` });
+    return;
+  }
+  res.json({ status: 'ok', provider: providerId });
+});
 
 // ── POST /ai — main AI assist handler ──
 aiRouter.post('/', async (req: Request, res: Response) => {
