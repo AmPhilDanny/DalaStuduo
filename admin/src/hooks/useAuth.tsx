@@ -3,6 +3,7 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { User, Session } from '@supabase/supabase-js';
+import { setTokenProvider } from '@/lib/api-client';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -22,6 +23,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    setTokenProvider(async () => {
+      const { data } = await supabase.auth.getSession();
+      return data.session?.access_token ?? null;
+    });
+
     // Safety timeout — if Supabase doesn't respond in 6s (e.g. project paused),
     // release the loading gate so the app renders anyway.
     const safetyTimer = setTimeout(() => {
