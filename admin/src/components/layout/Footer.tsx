@@ -9,6 +9,8 @@ const SOCIAL_ICONS: Record<string, React.ReactNode> = {
   instagram: <Instagram size={20} />,
 };
 
+const MAIN_SITE_URL = import.meta.env.VITE_MAIN_SITE_URL || 'http://localhost:3000';
+
 export function Footer() {
   const { config } = useSiteSettings();
   const { brand, footer: ft, social } = config;
@@ -61,11 +63,11 @@ export function Footer() {
           <div>
             <h3 className="font-bold mb-4">Company</h3>
             <ul className="space-y-2 text-sm text-primary-foreground/70">
-              <li><a href="http://localhost:3000/about" className="hover:text-secondary transition-colors">About</a></li>
-              <li><a href="http://localhost:3000/faq" className="hover:text-secondary transition-colors">FAQ</a></li>
-              <li><a href="http://localhost:3000/contact" className="hover:text-secondary transition-colors">Contact</a></li>
-              <li><a href="http://localhost:3000/terms" className="hover:text-secondary transition-colors">Terms</a></li>
-              <li><a href="http://localhost:3000/privacy" className="hover:text-secondary transition-colors">Privacy</a></li>
+              <li><a href={`${MAIN_SITE_URL}/about`} className="hover:text-secondary transition-colors">About</a></li>
+              <li><a href={`${MAIN_SITE_URL}/faq`} className="hover:text-secondary transition-colors">FAQ</a></li>
+              <li><a href={`${MAIN_SITE_URL}/contact`} className="hover:text-secondary transition-colors">Contact</a></li>
+              <li><a href={`${MAIN_SITE_URL}/terms`} className="hover:text-secondary transition-colors">Terms</a></li>
+              <li><a href={`${MAIN_SITE_URL}/privacy`} className="hover:text-secondary transition-colors">Privacy</a></li>
             </ul>
           </div>
 
