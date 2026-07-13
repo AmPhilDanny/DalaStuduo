@@ -41,7 +41,6 @@ export default function Projects() {
   }, []);
 
   const fetchProjects = async () => {
-    setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('projects')
@@ -271,7 +270,7 @@ export default function Projects() {
           <Input placeholder="Search projects..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
-        {isLoading ? (
+        {filtered.length === 0 && isLoading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <Loader2 className="w-8 h-8 animate-spin text-secondary" />
             <p className="text-muted-foreground">Loading projects...</p>

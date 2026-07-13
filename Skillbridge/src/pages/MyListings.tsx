@@ -53,7 +53,6 @@ export default function MyListings() {
   }, [user]);
 
   const fetchListings = async () => {
-    setIsLoading(true);
     try {
       const data = await getMyListings();
       setListings(data);
@@ -140,7 +139,7 @@ export default function MyListings() {
           </Button>
         </div>
 
-        {isLoading ? (
+        {listings.length === 0 && isLoading ? (
           <div className="flex justify-center py-24">
             <Loader2 className="w-8 h-8 animate-spin text-secondary" />
           </div>

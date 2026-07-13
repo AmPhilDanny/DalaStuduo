@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useSWR } from './useSWR';
 
 export interface SiteConfig {
   brand: {
@@ -46,6 +45,8 @@ export interface SiteConfig {
   };
   api_keys: Record<string, { api_key: string; enabled: boolean }>;
 }
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
 const DEFAULT_CONFIG: SiteConfig = {
   brand: {
@@ -122,41 +123,6 @@ const DEFAULT_CONFIG: SiteConfig = {
   api_keys: {},
 };
 
-export function useSiteSettings() {
-  const [config, setConfig] = useState<SiteConfig>(DEFAULT_CONFIG);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchConfig() {
-      try {
-        const { data, error } = await supabase
-          .from('site_settings')
-          .select('value')
-          .eq('key', 'site_config')
-          .single();
-
-        if (error) throw error;
-        if (data?.value && !cancelled) {
-          // Deep merge with defaults so any missing fields fall back to defaults
-          setConfig(mergeDeep(structuredClone(DEFAULT_CONFIG), data.value as Partial<SiteConfig>));
-        }
-      } catch {
-        // Silently fall back to defaults
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    fetchConfig();
-    return () => { cancelled = true; };
-  }, []);
-
-  return { config, loading };
-}
-
-// Simple deep merge utility
 function mergeDeep(target: SiteConfig, source: Partial<SiteConfig>): SiteConfig {
   const result = { ...target };
   for (const key of Object.keys(source) as (keyof SiteConfig)[]) {
@@ -168,4 +134,21 @@ function mergeDeep(target: SiteConfig, source: Partial<SiteConfig>): SiteConfig 
     }
   }
   return result;
+}
+
+export function useSiteSettings() {
+  const { data, isValidating } = useSWR({
+    key: 'site-config',
+    fetcher: async () => {
+      const res = await fetch(`${API_BASE}/site-config`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (!json?.data) throw new Error('Empty config');
+      return mergeDeep(structuredClone(DEFAULT_CONFIG), json.data as Partial<SiteConfig>);
+    },
+    initialData: DEFAULT_CONFIG,
+    onError: () => { /* keep defaults silently */ },
+  });
+
+  return { config: data, isValidating };
 }

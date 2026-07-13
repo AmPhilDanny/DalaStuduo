@@ -10,30 +10,24 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
-  isLoading: boolean;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+let cachedProfile: Profile | null = null;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(cachedProfile);
+  const [fetchedOnce, setFetchedOnce] = useState(false);
 
   useEffect(() => {
-    // Safety timeout — if Supabase doesn't respond in 6s (e.g. project paused),
-    // release the loading gate so the app renders anyway.
-    const safetyTimer = setTimeout(() => {
-      setIsLoading(false);
-    }, 6000);
-
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      clearTimeout(safetyTimer);
       setSession(session);
       if (session) fetchProfile(session.user.id);
-      else setIsLoading(false);
+      else setFetchedOnce(true);
     });
 
     // Listen for auth changes
@@ -41,17 +35,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       if (session) fetchProfile(session.user.id);
       else {
+        cachedProfile = null;
         setProfile(null);
-        setIsLoading(false);
+        setFetchedOnce(true);
       }
     });
 
     return () => {
-      clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -62,11 +56,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) throw error;
+      cachedProfile = data;
       setProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
-      setIsLoading(false);
+      setFetchedOnce(true);
     }
   };
 
@@ -74,17 +69,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     setSession(null);
     setProfile(null);
+    cachedProfile = null;
   };
 
-  const value = {
-    session,
-    user: session?.user ?? null,
-    profile,
-    isLoading,
-    signOut,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

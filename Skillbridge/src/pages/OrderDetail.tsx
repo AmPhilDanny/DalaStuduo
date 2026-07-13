@@ -232,7 +232,7 @@ export default function OrderDetail() {
     }
   };
 
-  if (isLoading) {
+  if (!order && isLoading) {
     return (
       <div className="min-h-screen pt-24 pb-12 px-4 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">

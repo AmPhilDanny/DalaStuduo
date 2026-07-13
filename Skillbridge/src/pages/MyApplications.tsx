@@ -39,7 +39,6 @@ export default function MyApplications() {
 
   const loadData = async () => {
     if (!user) return;
-    setIsLoading(true);
     try {
       const [{ data: jApps }, { data: pApps }] = await Promise.all([
         supabase.from('applications').select('*, jobs(title, type, requirements)').eq('student_id', user.id).order('created_at', { ascending: false }),
@@ -72,7 +71,7 @@ export default function MyApplications() {
         <h1 className="text-4xl font-bold text-primary mb-2">My Applications</h1>
         <p className="text-muted-foreground mb-10">Track every job and project application in one place.</p>
 
-        {isLoading ? (
+        {jobApps.length === 0 && projectApps.length === 0 && isLoading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <Loader2 className="w-8 h-8 animate-spin text-secondary" />
           </div>

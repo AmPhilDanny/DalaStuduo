@@ -75,7 +75,6 @@ export default function Profile() {
 
   const load = useCallback(async () => {
     if (!targetId) return;
-    setIsLoading(true);
     try {
       const [{ data: p, error: pErr }, { data: items }, { data: memberships }] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', targetId).single(),
@@ -291,7 +290,7 @@ export default function Profile() {
     }
   };
 
-  if (isLoading) {
+  if (!profile && isLoading) {
     return (
       <div className="min-h-screen pt-24 flex justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-secondary" />

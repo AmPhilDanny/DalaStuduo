@@ -45,7 +45,6 @@ export default function MyOrders() {
   }, [user, role, statusFilter]);
 
   const fetchOrders = async () => {
-    setIsLoading(true);
     try {
       const data = await getOrders({ role, status: statusFilter || undefined });
       setOrders(data);
@@ -105,7 +104,7 @@ export default function MyOrders() {
           </Select>
         </div>
 
-        {isLoading ? (
+        {orders.length === 0 && isLoading ? (
           <div className="flex justify-center py-24">
             <Loader2 className="w-8 h-8 animate-spin text-secondary" />
           </div>

@@ -76,7 +76,6 @@ export default function Wallet() {
   }, [user]);
 
   const fetchData = async () => {
-    setIsLoading(true);
     try {
       const [bal, txs, pts] = await Promise.all([
         getWalletBalance(),
@@ -178,7 +177,7 @@ export default function Wallet() {
         </h1>
         <p className="text-muted-foreground mb-8">Track your earnings, transactions, and withdrawals.</p>
 
-        {isLoading ? (
+        {balance === null && transactions.length === 0 && isLoading ? (
           <div className="flex justify-center py-24">
             <Loader2 className="w-8 h-8 animate-spin text-secondary" />
           </div>

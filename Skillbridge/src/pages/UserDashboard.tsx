@@ -34,13 +34,14 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default function UserDashboard() {
-  const { user, profile, isLoading: authLoading } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [applications, setApplications] = useState<ApplicationWithJob[]>([]);
   const [recommendedJobs, setRecommendedJobs] = useState<JobPosting[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (!user) { setLoaded(true); return; }
     const fetchDashboardData = async () => {
     try {
       const [appsRes, jobsRes] = await Promise.all([
@@ -66,21 +67,12 @@ export default function UserDashboard() {
     } catch {
       toast.error('Failed to load dashboard data');
     } finally {
-      setIsLoading(false);
+      setLoaded(true);
     }
   };
 
-    if (user) fetchDashboardData();
-    else if (!authLoading) setIsLoading(false);
-  }, [user, authLoading]);
-
-  if (authLoading || isLoading) {
-    return (
-      <div className="min-h-screen pt-24 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-secondary" />
-      </div>
-    );
-  }
+    fetchDashboardData();
+  }, [user]);
 
   if (!user) {
     return (

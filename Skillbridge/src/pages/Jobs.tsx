@@ -44,7 +44,6 @@ export default function Jobs() {
   }, [filterType]);
 
   const fetchJobs = async () => {
-    setIsLoading(true);
     try {
       let query = supabase
         .from('jobs')
@@ -276,7 +275,7 @@ export default function Jobs() {
           </div>
         </div>
 
-        {isLoading ? (
+        {filteredJobs.length === 0 && isLoading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <Loader2 className="w-8 h-8 animate-spin text-secondary" />
             <p className="text-muted-foreground">Loading opportunities...</p>

@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 const JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Freelance'] as const;
 
 export default function PostJob() {
-  const { user, profile, isLoading: authLoading } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -63,14 +63,6 @@ export default function PostJob() {
       setIsSubmitting(false);
     }
   };
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen pt-24 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-secondary" />
-      </div>
-    );
-  }
 
   if (!user) {
     return (

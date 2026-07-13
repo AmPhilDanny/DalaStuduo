@@ -165,7 +165,7 @@ export default function MarketplaceDetail() {
     }
   };
 
-  if (isLoading) {
+  if (!listing && isLoading) {
     return (
       <div className="min-h-screen pt-24 pb-12 px-4 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">

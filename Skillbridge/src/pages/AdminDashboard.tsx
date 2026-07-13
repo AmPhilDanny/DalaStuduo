@@ -109,10 +109,9 @@ const ORDER_STATUS_STYLES: Record<string, string> = {
 };
 
 export default function AdminDashboard() {
-  const { user, profile, isLoading: authLoading, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('services');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [checkingAuth, setCheckingAuth] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
 
   const [services, setServices] = useState<AdminService[]>([]);
@@ -203,14 +202,9 @@ export default function AdminDashboard() {
   );
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!user || !isAdminAccess) {
-      window.location.href = '/auth'; // using window.location to ensure full re-mount or navigate if imported
-    } else {
-      setCheckingAuth(false);
-      fetchAll();
-    }
-  }, [user, profile, authLoading, isAdminAccess]);
+    if (!user || !isAdminAccess) return;
+    fetchAll();
+  }, [user, profile, isAdminAccess]);
 
   const fetchAll = async () => {
     setIsLoading(true);
@@ -595,14 +589,6 @@ export default function AdminDashboard() {
       setSavingKeys(false);
     }
   };
-
-  if (authLoading || checkingAuth || isLoading) {
-    return (
-      <div className="min-h-screen pt-24 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-secondary" />
-      </div>
-    );
-  }
 
   if (!user || !isAdminAccess) {
     return null;

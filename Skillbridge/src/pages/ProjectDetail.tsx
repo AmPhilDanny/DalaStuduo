@@ -44,7 +44,6 @@ export default function ProjectDetail() {
 
   const load = useCallback(async () => {
     if (!id) return;
-    setIsLoading(true);
     try {
       const { data: proj, error: projErr } = await supabase
         .from('projects')
@@ -135,7 +134,7 @@ export default function ProjectDetail() {
     }
   };
 
-  if (isLoading) {
+  if (!project && isLoading) {
     return (
       <div className="min-h-screen pt-24 flex justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-secondary" />

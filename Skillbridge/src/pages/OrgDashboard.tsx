@@ -37,13 +37,13 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default function OrgDashboard() {
-  const { user, profile, isLoading: authLoading } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<OrgJob[]>([]);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) return;
     const fetchDashboardData = async () => {
     try {
       const [jobsRes, appsRes] = await Promise.all([
@@ -66,22 +66,11 @@ export default function OrgDashboard() {
       setApplicants((appsRes.data || []) as unknown as Applicant[]);
     } catch {
       toast.error('Failed to load dashboard data');
-    } finally {
-      setIsLoading(false);
     }
   };
 
-    if (user) fetchDashboardData();
-    else if (!authLoading) setIsLoading(false);
-  }, [user, authLoading]);
-
-  if (authLoading || isLoading) {
-    return (
-      <div className="min-h-screen pt-24 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-secondary" />
-      </div>
-    );
-  }
+    fetchDashboardData();
+  }, [user]);
 
   if (!user) {
     return (

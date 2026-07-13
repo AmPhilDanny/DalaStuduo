@@ -75,7 +75,6 @@ export default function Marketplace() {
   }, [categoryFilter, sort, minPrice, maxPrice, debouncedSearch]);
 
   const fetchData = useCallback(async () => {
-    setIsLoading(true);
     try {
       const [listingsResult, servicesData] = await Promise.all([
         getListings({
@@ -245,7 +244,7 @@ export default function Marketplace() {
         )}
 
         {/* Results info */}
-        {!isLoading && (
+        {listings.length > 0 && (
           <p className="text-xs text-muted-foreground mb-4">
             {totalCount} listing{totalCount !== 1 ? 's' : ''} found
             {debouncedSearch && <span> for &quot;{debouncedSearch}&quot;</span>}
@@ -253,7 +252,7 @@ export default function Marketplace() {
         )}
 
         {/* Content */}
-        {isLoading ? (
+        {listings.length === 0 && isLoading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <Loader2 className="w-8 h-8 animate-spin text-secondary" />
             <p className="text-muted-foreground">Loading marketplace...</p>

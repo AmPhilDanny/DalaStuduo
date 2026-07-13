@@ -34,7 +34,6 @@ export default function Tutor() {
   }, [user]);
 
   const fetchSessions = async () => {
-    setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('tutor_sessions')
@@ -148,7 +147,7 @@ export default function Tutor() {
           </Dialog>
         </div>
 
-        {isLoading ? (
+        {sessions.length === 0 && isLoading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <Loader2 className="w-8 h-8 animate-spin text-secondary" />
             <p className="text-muted-foreground">Loading sessions...</p>
