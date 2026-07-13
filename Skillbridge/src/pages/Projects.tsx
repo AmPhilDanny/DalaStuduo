@@ -275,6 +275,22 @@ export default function Projects() {
             <Loader2 className="w-8 h-8 animate-spin text-secondary" />
             <p className="text-muted-foreground">Loading projects...</p>
           </div>
+        ) : filtered.length === 0 && !user ? (
+          <div className="text-center py-24 bg-card rounded-xl border border-dashed border-border">
+            <FolderGit2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Find Projects to Join</h3>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              Sign in to browse collaboration opportunities and connect with builders across Africa.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Button asChild>
+                <Link to="/auth">Sign In</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/auth">Create Account</Link>
+              </Button>
+            </div>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-24 bg-card rounded-xl border border-dashed border-border">
             <FolderGit2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />

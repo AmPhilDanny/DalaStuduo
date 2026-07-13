@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -279,6 +280,22 @@ export default function Jobs() {
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <Loader2 className="w-8 h-8 animate-spin text-secondary" />
             <p className="text-muted-foreground">Loading opportunities...</p>
+          </div>
+        ) : filteredJobs.length === 0 && !user ? (
+          <div className="text-center py-24 bg-card rounded-xl border border-dashed border-border">
+            <Briefcase className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Find Work Opportunities</h3>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              Sign in to browse part-time work and internships from firms across Africa.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Button asChild>
+                <Link to="/auth">Sign In</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/auth">Create Account</Link>
+              </Button>
+            </div>
           </div>
         ) : filteredJobs.length === 0 ? (
           <div className="text-center py-24 bg-card rounded-xl border border-dashed border-border">
