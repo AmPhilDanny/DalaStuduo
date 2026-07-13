@@ -67,3 +67,5 @@ services:
         sync: false
       - key: VITE_API_URL
         value: https://skillbridge-api.onrender.com/api
+      - key: VITE_MAIN_SITE_URL
+        value: https://novaxbridge.onrender.com

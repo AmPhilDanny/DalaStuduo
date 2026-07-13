@@ -23,6 +23,7 @@ export function Navbar() {
   const { config, loading: siteLoading } = useSiteSettings();
   const navigate = useNavigate();
   const location = useLocation();
+  const MAIN_SITE_URL = import.meta.env.VITE_MAIN_SITE_URL || 'http://localhost:3000';
 
   // Notifications
   const [unreadCount, setUnreadCount] = useState(0);
@@ -128,7 +129,7 @@ export function Navbar() {
       }`}
     >
       <div className="container mx-auto px-4 flex items-center justify-between">
-        <a href="http://localhost:3000/" className="flex items-center gap-2">
+        <a href={`${MAIN_SITE_URL}/`} className="flex items-center gap-2">
           {config.brand.logo_url ? (
             <img src={config.brand.logo_url} alt={config.brand.site_name} className="w-8 h-8 object-contain" />
           ) : (
@@ -147,7 +148,7 @@ export function Navbar() {
             return (
               <a
                 key={link.name}
-                href={`http://localhost:3000${link.href}`}
+                href={`${MAIN_SITE_URL}${link.href}`}
                 onClick={(e) => handleNavClick(e, link.href)}
                 className={`text-sm font-medium transition-colors whitespace-nowrap ${
                   isActive
@@ -235,25 +236,25 @@ export function Navbar() {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <a href="http://localhost:3000/profile" className="cursor-pointer flex items-center gap-2">
+                    <a href={`${MAIN_SITE_URL}/profile`} className="cursor-pointer flex items-center gap-2">
                       <User className="w-4 h-4" />
                       <span>Profile</span>
                     </a>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href="http://localhost:3000/connections" className="cursor-pointer flex items-center gap-2">
+                    <a href={`${MAIN_SITE_URL}/connections`} className="cursor-pointer flex items-center gap-2">
                       <Users className="w-4 h-4" />
                       <span>Connections</span>
                     </a>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href="http://localhost:3000/messages" className="cursor-pointer flex items-center gap-2">
+                    <a href={`${MAIN_SITE_URL}/messages`} className="cursor-pointer flex items-center gap-2">
                       <MessageSquare className="w-4 h-4" />
                       <span>Messages</span>
                     </a>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href={`http://localhost:3000${profile?.role === 'firm' ? '/dashboard/org' : '/dashboard'}`} className="cursor-pointer flex items-center gap-2">
+                    <a href={`${MAIN_SITE_URL}${profile?.role === 'firm' ? '/dashboard/org' : '/dashboard'}`} className="cursor-pointer flex items-center gap-2">
                       <LayoutDashboard className="w-4 h-4" />
                       <span>Dashboard</span>
                     </a>
@@ -261,13 +262,13 @@ export function Navbar() {
                   {profile?.role === 'firm' && (
                     <>
                       <DropdownMenuItem asChild>
-                        <a href="http://localhost:3000/b2b/setup" className="cursor-pointer flex items-center gap-2">
+                        <a href={`${MAIN_SITE_URL}/b2b/setup`} className="cursor-pointer flex items-center gap-2">
                           <Building2 className="w-4 h-4" />
                           <span>Org Setup</span>
                         </a>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
-                        <a href="http://localhost:3000/jobs/new" className="cursor-pointer flex items-center gap-2">
+                        <a href={`${MAIN_SITE_URL}/jobs/new`} className="cursor-pointer flex items-center gap-2">
                           <Rocket className="w-4 h-4" />
                           <span>Post Job</span>
                         </a>
@@ -276,25 +277,25 @@ export function Navbar() {
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <a href="http://localhost:3000/orders" className="cursor-pointer flex items-center gap-2">
+                    <a href={`${MAIN_SITE_URL}/orders`} className="cursor-pointer flex items-center gap-2">
                       <Package className="w-4 h-4" />
                       <span>Orders</span>
                     </a>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href="http://localhost:3000/wallet" className="cursor-pointer flex items-center gap-2">
+                    <a href={`${MAIN_SITE_URL}/wallet`} className="cursor-pointer flex items-center gap-2">
                       <WalletIcon className="w-4 h-4" />
                       <span>Wallet</span>
                     </a>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href="http://localhost:3000/my-listings" className="cursor-pointer flex items-center gap-2">
+                    <a href={`${MAIN_SITE_URL}/my-listings`} className="cursor-pointer flex items-center gap-2">
                       <Store className="w-4 h-4" />
                       <span>My Listings</span>
                     </a>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href="http://localhost:3000/disputes" className="cursor-pointer flex items-center gap-2">
+                    <a href={`${MAIN_SITE_URL}/disputes`} className="cursor-pointer flex items-center gap-2">
                       <Shield className="w-4 h-4" />
                       <span>Disputes</span>
                     </a>
@@ -303,7 +304,7 @@ export function Navbar() {
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem asChild>
-                        <a href="http://localhost:4000/" className="cursor-pointer flex items-center gap-2 w-full">
+                        <a href="/" className="cursor-pointer flex items-center gap-2 w-full">
                           <Settings className="w-4 h-4" />
                           <span>Admin Panel</span>
                         </a>
@@ -319,7 +320,7 @@ export function Navbar() {
               </DropdownMenu>
             </div>
           ) : (
-            <Button onClick={() => window.location.href = 'http://localhost:3000/auth'} className="whitespace-nowrap">
+            <Button onClick={() => window.location.href = `${MAIN_SITE_URL}/auth`} className="whitespace-nowrap">
               Sign In
             </Button>
           )}
@@ -344,7 +345,7 @@ export function Navbar() {
             return (
               <a
                 key={link.name}
-                href={`http://localhost:3000${link.href}`}
+                href={`${MAIN_SITE_URL}${link.href}`}
                 onClick={(e) => handleNavClick(e, link.href)}
                 className={`text-lg font-medium transition-colors ${
                   isActive
@@ -361,40 +362,40 @@ export function Navbar() {
               <div className="border-t border-border pt-3 mt-1">
                 <p className="text-xs text-muted-foreground mb-2">Account</p>
                 <div className="flex items-center gap-3 mb-2">
-                  <a href="http://localhost:3000/orders" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
+                  <a href={`${MAIN_SITE_URL}/orders`} onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
                     <Package className="w-4 h-4" /> Orders
                   </a>
-                  <a href="http://localhost:3000/disputes" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
+                  <a href={`${MAIN_SITE_URL}/disputes`} onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
                     <Shield className="w-4 h-4" /> Disputes
                   </a>
-                  <a href="http://localhost:3000/wallet" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
+                  <a href={`${MAIN_SITE_URL}/wallet`} onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
                     <WalletIcon className="w-4 h-4" /> Wallet
                   </a>
-                  <a href="http://localhost:3000/my-listings" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
+                  <a href={`${MAIN_SITE_URL}/my-listings`} onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
                     <Store className="w-4 h-4" /> My Listings
                   </a>
                 </div>
-                <a href={`http://localhost:3000${profile?.role === 'firm' ? '/dashboard/org' : '/dashboard'}`}
+                <a href={`${MAIN_SITE_URL}${profile?.role === 'firm' ? '/dashboard/org' : '/dashboard'}`}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="text-lg font-medium text-primary block"
                 >
                   Dashboard
                 </a>
                 {profile?.role === 'firm' && (
-                  <a href="http://localhost:3000/jobs/new"
+                  <a href={`${MAIN_SITE_URL}/jobs/new`}
                     onClick={() => setIsMobileMenuOpen(false)}
                     className="text-lg font-medium text-muted-foreground hover:text-primary block"
                   >
                     Post Job
                   </a>
                 )}
-                <a href="http://localhost:3000//profile"
+                <a href={`${MAIN_SITE_URL}/profile`}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="text-lg font-medium text-muted-foreground hover:text-primary block"
                 >
                   My Profile
                 </a>
-                <a href="http://localhost:3000//my-applications"
+                <a href={`${MAIN_SITE_URL}/my-applications`}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="text-lg font-medium text-muted-foreground hover:text-primary block"
                 >
