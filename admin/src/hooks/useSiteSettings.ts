@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
 export interface SiteConfig {
   brand: {
@@ -131,16 +132,12 @@ export function useSiteSettings() {
 
     async function fetchConfig() {
       try {
-        const { data, error } = await supabase
-          .from('site_settings')
-          .select('value')
-          .eq('key', 'site_config')
-          .maybeSingle();
-
-        if (error) throw error;
-        if (data?.value && !cancelled) {
+        const res = await fetch(`${API_BASE}/site-config`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (json?.data && !cancelled) {
           // Deep merge with defaults so any missing fields fall back to defaults
-          setConfig(mergeDeep(structuredClone(DEFAULT_CONFIG), data.value as Partial<SiteConfig>));
+          setConfig(mergeDeep(structuredClone(DEFAULT_CONFIG), json.data as Partial<SiteConfig>));
         }
       } catch {
         // Silently fall back to defaults

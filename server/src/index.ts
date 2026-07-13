@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import pino from 'pino';
 import { errorHandler } from './middleware/error.js';
 import { requireAuth } from './middleware/auth.js';
+import { adminClient } from './lib/supabase-admin.js';
 import { adminRouter } from './routes/admin/index.js';
 import { marketplaceRouter } from './routes/marketplace/index.js';
 import { paymentsRouter } from './routes/payments/index.js';
@@ -35,6 +36,20 @@ app.use((req, _res, next) => {
 // ── Health Check ──
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ── Public: site config (cached for public consumption, bypasses RLS) ──
+app.get('/api/site-config', async (_req, res) => {
+  const { data, error } = await adminClient
+    .from('site_settings')
+    .select('value')
+    .eq('key', 'site_config')
+    .maybeSingle();
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json({ data: data?.value || null });
 });
 
 // ── Public Routes (no auth required) ──

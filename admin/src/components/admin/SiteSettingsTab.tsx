@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Save, Plus, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Json } from '@/integrations/supabase/types';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
 interface NavLink { name: string; href: string; }
 interface FooterColumn { title: string; links: NavLink[]; }
@@ -83,9 +84,12 @@ export default function SiteSettingsTab() {
   const loadConfig = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from('site_settings').select('value').eq('key', 'site_config').single();
-      if (data?.value) {
-        setConfig({ ...DEFAULT_CONFIG, ...(data.value as Record<string, unknown>) } as SiteConfig);
+      const res = await fetch(`${API_BASE}/site-config`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.data) {
+          setConfig({ ...DEFAULT_CONFIG, ...(json.data as Record<string, unknown>) } as SiteConfig);
+        }
       }
     } catch { /* silent */ }
     finally { setLoading(false); }
@@ -94,11 +98,18 @@ export default function SiteSettingsTab() {
   const saveConfig = async () => {
     setSaving(true);
     try {
-      const { data: existing } = await supabase.from('site_settings').select('id').eq('key', 'site_config').single();
-      if (existing) {
-        await supabase.from('site_settings').update({ value: config as unknown as Json }).eq('key', 'site_config');
-      } else {
-        await supabase.from('site_settings').insert({ key: 'site_config', value: config as unknown as Json });
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch(`${API_BASE}/admin/settings`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'site_config', value: config }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || 'Failed to save');
       }
       toast.success('Site settings saved');
     } catch (err) {
