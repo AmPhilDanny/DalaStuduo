@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { marketplaceApi, paymentsApi, walletApi, messagingApi, notificationsApi, aiApi, adminApi, get, post, patch, del } from '@/lib/api-client';
+import { marketplaceApi, paymentsApi, walletApi, messagingApi, notificationsApi, aiApi, adminApi, get, post, patch, put, del } from '@/lib/api-client';
 
 export interface Notification {
   id: string;
@@ -296,7 +296,7 @@ export async function deleteReview(orderId: string): Promise<void> {
 }
 
 export async function submitReview(orderId: string, rating: number, review: string): Promise<void> {
-  const res = await marketplaceApi.submitReview(orderId, body);
+  const res = await marketplaceApi.submitReview(orderId, { rating, review });
   return res.data;
 }
 
@@ -892,7 +892,7 @@ export async function adminAiInsight(
 
 // ── Admin API ──
 
-async function adminFetch<T>(path: string, options?: RequestInit): Promise<T> {
+async function adminFetch<T>(path: string, options?: RequestInit): Promise<{ data: T; [key: string]: any }> {
   const method = (options?.method || 'GET').toLowerCase();
   const body = options?.body ? JSON.parse(options.body as string) : undefined;
   if (method === 'get' || method === '') return get<T>(path);
@@ -1031,7 +1031,7 @@ export async function initiateManualPayment(
   screenshotUrl: string,
   notes?: string
 ): Promise<ManualPayment> {
-  const res = await paymentsApi.manualPayment(body);
+  const res = await paymentsApi.manualPayment({ order_id: orderId, screenshot_url: screenshotUrl, notes });
   return res.data;
 }
 
