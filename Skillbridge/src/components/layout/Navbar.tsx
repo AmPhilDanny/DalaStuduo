@@ -20,7 +20,7 @@ export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, profile, signOut } = useAuth();
-  const { config, loading: siteLoading } = useSiteSettings();
+  const { config, isValidating: siteLoading } = useSiteSettings();
   const navigate = useNavigate();
   const location = useLocation();
 
