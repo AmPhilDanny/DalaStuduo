@@ -43,7 +43,7 @@ services:
       - key: VITE_SUPABASE_ANON_KEY
         sync: false
       - key: VITE_API_URL
-        value: https://skillbridge-api.onrender.com/api
+        value: https://dalastudioshowcase.onrender.com/api
 
   # ── Admin dashboard ──
   - type: web
