@@ -87,7 +87,12 @@ export default function SiteSettingsTab() {
 
   const loadProviders = async () => {
     try {
-      const res = await fetch(`${API_BASE}/ai/providers`);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/ai/providers`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const json = await res.json();
         if (json?.data) setAiProviders(json.data as AiProviderInfo[]);
