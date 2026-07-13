@@ -124,12 +124,17 @@ marketplaceRouter.patch('/listings/:id', async (req: Request, res: Response) => 
   const userIsAdmin = await isAdmin(req.user!.id);
   const body = req.body;
 
+  // Fetch current listing for notification & ownership check
+  const { data: existing } = await supabase.from('marketplace_listings').select('*').eq('id', req.params.id).single();
+  if (!existing) throw new AppError(404, 'Listing not found');
+
   const updates: Record<string, unknown> = {};
   if (body.title !== undefined) updates.title = body.title;
   if (body.description !== undefined) updates.description = body.description;
   if (body.price !== undefined) updates.price = body.price;
   if (body.duration_hours !== undefined) updates.duration_hours = body.duration_hours;
   if (body.status !== undefined) updates.status = body.status;
+  if (body.reason !== undefined) updates.admin_reason = body.reason;
   if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update');
 
   let query = supabase.from('marketplace_listings').update(updates).eq('id', req.params.id);
@@ -137,6 +142,19 @@ marketplaceRouter.patch('/listings/:id', async (req: Request, res: Response) => 
 
   const { data, error } = await query.select().single();
   if (error || !data) throw new AppError(404, 'Listing not found or not owned by you');
+
+  // Send notification to poster if admin changed status
+  if (userIsAdmin && body.status && body.status !== existing.status) {
+    const reason = body.reason || 'No specific reason provided.';
+    const statusLabel = (body.status as string).replace('_', ' ');
+    await supabase.from('notifications').insert({
+      profile_id: existing.provider_id,
+      title: `Listing ${statusLabel}`,
+      message: `Your listing "${existing.title}" has been ${body.status === 'cancelled' ? 'removed' : 'updated to ' + body.status} by an admin. Reason: ${reason}`,
+      type: 'system',
+    }).maybeSingle();
+  }
+
   res.json({ data });
 });
 
@@ -144,11 +162,28 @@ marketplaceRouter.patch('/listings/:id', async (req: Request, res: Response) => 
 marketplaceRouter.delete('/listings/:id', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const userIsAdmin = await isAdmin(req.user!.id);
+
+  // Fetch before deleting so we can notify the owner
+  const { data: existing } = await supabase.from('marketplace_listings').select('*').eq('id', req.params.id).single();
+  if (!existing) throw new AppError(404, 'Listing not found');
+
   let query = supabase.from('marketplace_listings').delete().eq('id', req.params.id);
   if (!userIsAdmin) query = query.eq('provider_id', req.user!.id);
 
   const { data, error } = await query.select().single();
   if (error || !data) throw new AppError(404, 'Listing not found or not owned by you');
+
+  // Notify the poster if admin is deleting
+  if (userIsAdmin) {
+    const reason = req.query.reason as string || 'No specific reason provided.';
+    await supabase.from('notifications').insert({
+      profile_id: existing.provider_id,
+      title: 'Listing Deleted',
+      message: `Your listing "${existing.title}" has been deleted by an admin. Reason: ${reason}`,
+      type: 'system',
+    }).maybeSingle();
+  }
+
   res.json({ data });
 });
 

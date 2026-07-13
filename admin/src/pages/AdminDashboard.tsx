@@ -39,7 +39,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, Building2, Banknote, Image as ImageIcon, ChevronLeft, ChevronRight, Bell, LogOut, LayoutDashboard } from 'lucide-react';
+import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, Building2, Banknote, Image as ImageIcon, ChevronLeft, ChevronRight, Bell, LogOut, LayoutDashboard, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
@@ -175,6 +175,22 @@ export default function AdminDashboard() {
   const [serviceFeePct, setServiceFeePct] = useState(5);
   const [savingServiceFee, setSavingServiceFee] = useState(false);
 
+  // Listings management
+  const [adminListings, setAdminListings] = useState<any[]>([]);
+  const [listingStatusFilter, setListingStatusFilter] = useState('');
+  const [loadingListings, setLoadingListings] = useState(false);
+
+  // Projects management
+  const [adminProjects, setAdminProjects] = useState<any[]>([]);
+  const [projectStatusFilter, setProjectStatusFilter] = useState('');
+  const [loadingProjects, setLoadingProjects] = useState(false);
+
+  // Admin action dialog (edit/delete with reason)
+  const [adminAction, setAdminAction] = useState<{ type: 'edit' | 'delete'; entity: 'listing' | 'project'; id: string; title: string; currentStatus?: string } | null>(null);
+  const [adminReason, setAdminReason] = useState('');
+  const [adminNewStatus, setAdminNewStatus] = useState('');
+  const [processingAdminAction, setProcessingAdminAction] = useState(false);
+
   // Auth
   const [loginEmail, setLoginEmail] = useState(DEFAULT_ADMIN_EMAIL);
   const [loginPassword, setLoginPassword] = useState('');
@@ -268,6 +284,8 @@ export default function AdminDashboard() {
       loadDisputes();
       loadOfflinePaymentConfig();
       loadManualPayments();
+      loadListings();
+      loadProjects();
     } catch (error) {
       toast.error('Failed to load admin data');
     } finally {
@@ -425,6 +443,69 @@ export default function AdminDashboard() {
       toast.error(error instanceof Error ? error.message : 'Failed to save');
     } finally {
       setSavingServiceFee(false);
+    }
+  };
+
+  const loadListings = async () => {
+    setLoadingListings(true);
+    try {
+      let query = supabase.from('marketplace_listings').select('*, service:services(id, name, slug, category), provider:profiles(id, full_name, avatar_url)').order('created_at', { ascending: false });
+      if (listingStatusFilter) query = query.eq('status', listingStatusFilter);
+      const { data } = await query;
+      setAdminListings(data || []);
+    } catch {} finally {
+      setLoadingListings(false);
+    }
+  };
+
+  const loadProjects = async () => {
+    setLoadingProjects(true);
+    try {
+      let query = supabase.from('projects').select('*, owner:profiles(id, full_name, avatar_url)').order('created_at', { ascending: false });
+      if (projectStatusFilter) query = query.eq('status', projectStatusFilter);
+      const { data } = await query;
+      setAdminProjects(data || []);
+    } catch {} finally {
+      setLoadingProjects(false);
+    }
+  };
+
+  const performAdminAction = async () => {
+    if (!adminAction) return;
+    setProcessingAdminAction(true);
+    try {
+      const { data: ses } = await supabase.auth.getSession();
+      const tok = ses.session?.access_token;
+      if (!tok) throw new Error('Not authenticated');
+
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4001';
+
+      if (adminAction.type === 'edit') {
+        const res = await fetch(`${baseUrl}/api/admin/${adminAction.entity}s/${adminAction.id}`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: adminNewStatus, reason: adminReason }),
+        });
+        if (!res.ok) throw new Error('Failed to update');
+        toast.success(`${adminAction.entity === 'listing' ? 'Listing' : 'Project'} updated`);
+      } else {
+        const params = new URLSearchParams();
+        if (adminReason) params.set('reason', adminReason);
+        const res = await fetch(`${baseUrl}/api/admin/${adminAction.entity}s/${adminAction.id}?${params}`, { method: 'DELETE', headers: { Authorization: `Bearer ${tok}` } });
+        if (!res.ok) throw new Error('Failed to delete');
+        toast.success(`${adminAction.entity === 'listing' ? 'Listing' : 'Project'} deleted`);
+      }
+
+      setAdminAction(null);
+      setAdminReason('');
+      setAdminNewStatus('');
+      if (adminAction.entity === 'listing') loadListings();
+      else loadProjects();
+      fetchAll();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Action failed');
+    } finally {
+      setProcessingAdminAction(false);
     }
   };
 
@@ -700,6 +781,8 @@ export default function AdminDashboard() {
   const NAV_ITEMS: { value: string; label: string; icon: React.ReactNode }[] = [
     { value: 'services', label: 'Services', icon: <LayoutGrid className="w-4 h-4" /> },
     { value: 'orders', label: 'Orders', icon: <ShoppingCart className="w-4 h-4" /> },
+    { value: 'listings', label: 'Listings', icon: <ShoppingCart className="w-4 h-4" /> },
+    { value: 'projects', label: 'Projects', icon: <Building2 className="w-4 h-4" /> },
     { value: 'users', label: 'Users', icon: <Users className="w-4 h-4" /> },
     { value: 'payouts', label: 'Payouts', icon: <Wallet className="w-4 h-4" /> },
     { value: 'payment-gateways', label: 'Payment', icon: <CreditCard className="w-4 h-4" /> },
@@ -1248,6 +1331,146 @@ export default function AdminDashboard() {
             </Card>
           )}
 
+          {/* ═══ LISTINGS ═══ */}
+          {activeTab === 'listings' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5 text-secondary" /> Listings Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2 mb-4">
+                  <Select value={listingStatusFilter} onValueChange={setListingStatusFilter}>
+                    <SelectTrigger className="w-[180px]"><SelectValue placeholder="All statuses" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All statuses</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="paused">Paused</SelectItem>
+                      <SelectItem value="deleted">Deleted</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="sm" onClick={loadListings} disabled={loadingListings}>
+                    {loadingListings ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Refresh
+                  </Button>
+                </div>
+                {loadingListings ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
+                ) : adminListings.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No listings found.</p>
+                ) : (
+                  <div className="border rounded-lg overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Provider</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Price</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead>Created</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {adminListings.map((l) => (
+                          <TableRow key={l.id}>
+                            <TableCell className="font-medium max-w-[200px] truncate">{l.title || l.service?.name}</TableCell>
+                            <TableCell>{l.provider?.full_name || l.provider_id?.slice(0, 8)}</TableCell>
+                            <TableCell><Badge variant={l.status === 'active' ? 'default' : 'secondary'}>{l.status}</Badge></TableCell>
+                            <TableCell>₦{Number(l.price || l.service?.base_price || 0).toLocaleString()}</TableCell>
+                            <TableCell>{l.service?.category || '-'}</TableCell>
+                            <TableCell className="text-xs">{new Date(l.created_at).toLocaleDateString()}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setAdminAction({ type: 'edit', entity: 'listing', id: l.id, title: l.title || l.service?.name, currentStatus: l.status })}>
+                                  <Edit className="w-3 h-3 mr-1" /> Edit
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600" onClick={() => setAdminAction({ type: 'delete', entity: 'listing', id: l.id, title: l.title || l.service?.name })}>
+                                  <Trash2 className="w-3 h-3 mr-1" /> Delete
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ═══ PROJECTS ═══ */}
+          {activeTab === 'projects' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-secondary" /> Projects Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2 mb-4">
+                  <Select value={projectStatusFilter} onValueChange={setProjectStatusFilter}>
+                    <SelectTrigger className="w-[180px]"><SelectValue placeholder="All statuses" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All statuses</SelectItem>
+                      <SelectItem value="open">Open</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="sm" onClick={loadProjects} disabled={loadingProjects}>
+                    {loadingProjects ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Refresh
+                  </Button>
+                </div>
+                {loadingProjects ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
+                ) : adminProjects.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No projects found.</p>
+                ) : (
+                  <div className="border rounded-lg overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Owner</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Budget</TableHead>
+                          <TableHead>Created</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {adminProjects.map((p) => (
+                          <TableRow key={p.id}>
+                            <TableCell className="font-medium max-w-[200px] truncate">{p.title}</TableCell>
+                            <TableCell>{p.owner?.full_name || p.owner_id?.slice(0, 8)}</TableCell>
+                            <TableCell><Badge variant={p.status === 'completed' ? 'default' : 'secondary'}>{p.status}</Badge></TableCell>
+                            <TableCell>₦{Number(p.budget || 0).toLocaleString()}</TableCell>
+                            <TableCell className="text-xs">{new Date(p.created_at).toLocaleDateString()}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setAdminAction({ type: 'edit', entity: 'project', id: p.id, title: p.title, currentStatus: p.status })}>
+                                  <Edit className="w-3 h-3 mr-1" /> Edit
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600" onClick={() => setAdminAction({ type: 'delete', entity: 'project', id: p.id, title: p.title })}>
+                                  <Trash2 className="w-3 h-3 mr-1" /> Delete
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* ═══ SITE SETTINGS ═══ */}
           {activeTab === 'site-settings' && <SiteSettingsTab />}
         </div>
@@ -1265,6 +1488,62 @@ export default function AdminDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingService(null)}>Cancel</Button>
             <Button onClick={saveService}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Action Dialog */}
+      <Dialog open={!!adminAction} onOpenChange={(o) => !o && setAdminAction(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {adminAction?.type === 'edit' ? 'Edit' : 'Delete'} {adminAction?.entity === 'listing' ? 'Listing' : 'Project'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              <strong>Title:</strong> {adminAction?.title}
+            </p>
+            {adminAction?.type === 'edit' && (
+              <div className="space-y-2">
+                <Label>New Status</Label>
+                <div className="flex gap-2 flex-wrap">
+                  {(adminAction?.entity === 'listing'
+                    ? ['active', 'inactive', 'paused']
+                    : ['open', 'in_progress', 'completed', 'cancelled']
+                  ).map((s) => (
+                    <Button
+                      key={s}
+                      type="button"
+                      variant={adminNewStatus === s ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setAdminNewStatus(s)}
+                    >
+                      {s.replace('_', ' ')}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Reason (optional, sent to {adminAction?.entity === 'listing' ? 'provider' : 'owner'})</Label>
+              <Textarea
+                placeholder="Explain why this action is being taken..."
+                value={adminReason}
+                onChange={(e) => setAdminReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdminAction(null)}>Cancel</Button>
+            <Button
+              disabled={processingAdminAction || (adminAction?.type === 'edit' && !adminNewStatus)}
+              className={adminAction?.type === 'delete' ? 'bg-red-600 hover:bg-red-700' : ''}
+              onClick={performAdminAction}
+            >
+              {processingAdminAction ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              {adminAction?.type === 'edit' ? 'Update Status' : 'Delete'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

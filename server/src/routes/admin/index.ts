@@ -335,6 +335,145 @@ adminRouter.get('/audit-log', async (req: Request, res: Response) => {
   res.json({ data });
 });
 
+// ── GET /admin/listings — all marketplace listings ──
+adminRouter.get('/listings', async (req: Request, res: Response) => {
+  const status = req.query.status as string | undefined;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  let query = adminClient
+    .from('marketplace_listings')
+    .select('*, service:services(id, name, slug, category), provider:profiles(id, full_name, avatar_url)', { count: 'exact' });
+
+  if (status) query = query.eq('status', status);
+  const { data, error, count } = await query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+  if (error) throw new AppError(500, error.message);
+  res.json({ data, count, limit, offset });
+});
+
+// ── PATCH /admin/listings/:id — admin update listing ──
+adminRouter.patch('/listings/:id',
+  validate(z.object({
+    status: z.enum(['active', 'paused', 'completed', 'cancelled']).optional(),
+    reason: z.string().optional(),
+  })),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const updates: Record<string, unknown> = {};
+    if (req.body.status) updates.status = req.body.status;
+    if (req.body.reason) updates.admin_reason = req.body.reason;
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No fields to update');
+
+    const { data: existing } = await adminClient.from('marketplace_listings').select('*, provider:profiles(id, full_name)').eq('id', id).single();
+    if (!existing) throw new AppError(404, 'Listing not found');
+
+    const { data, error } = await adminClient.from('marketplace_listings').update(updates).eq('id', id).select().single();
+    if (error) throw new AppError(500, error.message);
+
+    // Notify the owner
+    if (req.body.status && req.body.status !== existing.status) {
+      const reason = req.body.reason || 'No specific reason provided.';
+      const statusLabel = (req.body.status as string).replace('_', ' ');
+      await adminClient.from('notifications').insert({
+        profile_id: existing.provider_id,
+        title: `Listing ${statusLabel}`,
+        message: `Your listing "${existing.title}" has been ${req.body.status === 'cancelled' ? 'removed' : 'updated to ' + req.body.status} by an admin. Reason: ${reason}`,
+        type: 'system',
+      }).maybeSingle();
+    }
+
+    res.json({ data });
+  }
+);
+
+// ── DELETE /admin/listings/:id — admin delete listing ──
+adminRouter.delete('/listings/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const reason = (req.query.reason as string) || '';
+
+  const { data: existing } = await adminClient.from('marketplace_listings').select('*, provider:profiles(id, full_name)').eq('id', id).single();
+  if (!existing) throw new AppError(404, 'Listing not found');
+
+  const { data, error } = await adminClient.from('marketplace_listings').delete().eq('id', id).select().single();
+  if (error) throw new AppError(500, error.message);
+
+  // Notify the owner
+  const reasonMsg = reason ? ` Reason: ${reason}` : '';
+  await adminClient.from('notifications').insert({
+    profile_id: existing.provider_id,
+    title: 'Listing Deleted',
+    message: `Your listing "${existing.title}" has been deleted by an admin.${reasonMsg}`,
+    type: 'system',
+  }).maybeSingle();
+
+  res.json({ data });
+});
+
+// ── GET /admin/projects — all projects ──
+adminRouter.get('/projects', async (req: Request, res: Response) => {
+  const status = req.query.status as string | undefined;
+  let query = adminClient
+    .from('projects')
+    .select('*, owner:profiles(id, full_name, avatar_url)')
+    .order('created_at', { ascending: false });
+  if (status) query = query.eq('status', status);
+  const { data, error } = await query;
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// ── PATCH /admin/projects/:id — admin update project ──
+adminRouter.patch('/projects/:id',
+  validate(z.object({ status: z.string().optional(), reason: z.string().optional() })),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const updates: Record<string, unknown> = {};
+    if (req.body.status) updates.status = req.body.status;
+    if (req.body.reason) updates.admin_reason = req.body.reason;
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No fields to update');
+
+    const { data: existing } = await adminClient.from('projects').select('*, owner:profiles(id, full_name)').eq('id', id).single();
+    if (!existing) throw new AppError(404, 'Project not found');
+
+    const { data, error } = await adminClient.from('projects').update(updates).eq('id', id).select().single();
+    if (error) throw new AppError(500, error.message);
+
+    if (req.body.status && req.body.status !== existing.status) {
+      const reason = req.body.reason || 'No specific reason provided.';
+      await adminClient.from('notifications').insert({
+        profile_id: existing.owner_id,
+        title: `Project ${req.body.status}`,
+        message: `Your project "${existing.title}" has been updated to ${req.body.status} by an admin. Reason: ${reason}`,
+        type: 'system',
+      }).maybeSingle();
+    }
+
+    res.json({ data });
+  }
+);
+
+// ── DELETE /admin/projects/:id — admin delete project ──
+adminRouter.delete('/projects/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const reason = (req.query.reason as string) || '';
+
+  const { data: existing } = await adminClient.from('projects').select('*, owner:profiles(id, full_name)').eq('id', id).single();
+  if (!existing) throw new AppError(404, 'Project not found');
+
+  const { data, error } = await adminClient.from('projects').delete().eq('id', id).select().single();
+  if (error) throw new AppError(500, error.message);
+
+  const reasonMsg = reason ? ` Reason: ${reason}` : '';
+  await adminClient.from('notifications').insert({
+    profile_id: existing.owner_id,
+    title: 'Project Deleted',
+    message: `Your project "${existing.title}" has been deleted by an admin.${reasonMsg}`,
+    type: 'system',
+  }).maybeSingle();
+
+  res.json({ data });
+});
+
 // ── GET /admin/config ──
 adminRouter.get('/config', async (_req: Request, res: Response) => {
   const { data, error } = await adminClient.from('platform_config').select('*').order('key');

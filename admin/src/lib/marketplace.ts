@@ -208,7 +208,7 @@ export async function verifyFlutterwavePayment(transactionId: string): Promise<{
 }
 
 export async function releaseMilestonePayment(milestoneId: string): Promise<{ released: boolean; amount: number }> {
-  const res = await paymentsApi.releaseMilestone(milestone_id);
+  const res = await paymentsApi.releaseMilestone(milestoneId);
   return res.data;
 }
 
