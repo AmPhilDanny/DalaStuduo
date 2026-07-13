@@ -1,13 +1,16 @@
 services:
+  # ── Express API server ──
   - type: web
     name: skillbridge-api
-    env: node
+    runtime: node
     rootDir: server
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: "4001"
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
@@ -19,12 +22,44 @@ services:
       - key: FLUTTERWAVE_SECRET_KEY
         sync: false
 
+  # ── Main frontend ──
+  - type: web
+    name: skillbridge
+    runtime: static
+    rootDir: Skillbridge
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: VITE_API_URL
+        value: https://skillbridge-api.onrender.com/api
+
+  # ── Admin dashboard ──
   - type: web
     name: skillbridge-admin
-    env: node
+    runtime: static
     rootDir: admin
     buildCommand: npm install && npm run build
-    startCommand: npm run preview
+    staticPublishPath: dist
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       - key: VITE_SUPABASE_URL
         sync: false
