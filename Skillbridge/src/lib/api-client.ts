@@ -3,7 +3,7 @@
  * Replaces direct supabase.functions.invoke() calls.
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://dalastudioshowcase.onrender.com/api';
 
 let _getAccessToken: (() => Promise<string | null>) | null = null;
 
