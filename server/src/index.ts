@@ -1,5 +1,7 @@
 import 'dotenv/config';
-import express, { Express } from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import pino from 'pino';
@@ -20,12 +22,29 @@ import { webhooksRouter } from './routes/webhooks/index.js';
 import { emailRouter } from './routes/email/index.js';
 import { githubRouter } from './routes/github/index.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const logger = pino({ name: 'skillbridge-server' });
 const app: Express = express();
 const PORT = parseInt(process.env.PORT || '4001', 10);
 
 // ── Global Middleware ──
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://*.supabase.co", "wss://*.supabase.co"],
+      fontSrc: ["'self'", "https:", "data:"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'self'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+}));
 const ALLOWED_ORIGINS = [
   /^https?:\/\/localhost:(3000|4000)$/,
   /^https:\/\/[a-zA-Z0-9-]+\.onrender\.com$/,
@@ -89,6 +108,25 @@ app.use('/api/github', requireAuth, githubRouter);
 
 // ── Admin Routes (auth + admin role) ──
 app.use('/api/admin', requireAuth, adminRouter);
+
+// ── Frontend Static Files (Vite SPA output) ──
+const frontendDist = path.resolve(__dirname, '../../Skillbridge/dist');
+app.use(express.static(frontendDist, {
+  maxAge: '1y',
+  immutable: true,
+  setHeaders(res, filePath) {
+    // Assets with hashes in filename can be cached aggressively
+    if (filePath.includes('/assets/')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  },
+}));
+
+// ── SPA Fallback: serve index.html for any non-API GET route ──
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.path.startsWith('/api/')) return next();
+  res.sendFile(path.join(frontendDist, 'index.html'));
+});
 
 // ── Error Handler ──
 app.use(errorHandler);
