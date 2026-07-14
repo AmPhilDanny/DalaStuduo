@@ -4,7 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import pino from 'pino';
 import { errorHandler } from './middleware/error.js';
-import { requireAuth } from './middleware/auth.js';
+import { requireAuth, optionalAuth } from './middleware/auth.js';
 import { adminClient } from './lib/supabase-admin.js';
 import { adminRouter } from './routes/admin/index.js';
 import { marketplaceRouter } from './routes/marketplace/index.js';
@@ -68,8 +68,8 @@ app.get('/api/site-config', async (_req, res) => {
 // ── Public Routes (no auth required) ──
 app.use('/api/webhooks', webhooksRouter);
 
-// ── Authenticated Routes ──
-app.use('/api/marketplace', requireAuth, marketplaceRouter);
+// ── Marketplace Routes (public read, authenticated write) ──
+app.use('/api/marketplace', optionalAuth, marketplaceRouter);
 app.use('/api/payments', requireAuth, paymentsRouter);
 app.use('/api/wallet', requireAuth, walletRouter);
 app.use('/api/messaging', requireAuth, messagingRouter);

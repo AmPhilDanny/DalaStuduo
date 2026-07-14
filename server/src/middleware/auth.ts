@@ -14,28 +14,20 @@ declare global {
 }
 
 /**
- * JWT verification middleware.
- * Extracts Bearer token from Authorization header and verifies with Supabase.
- * Attaches `req.user` (verified user info) and `req.supabaseClient` on success.
+ * Shared logic to verify a Bearer token and attach user + Supabase client to the request.
+ * Returns true on success, false on auth failure.
  */
-export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+async function attachUserFromToken(req: Request): Promise<boolean> {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing or invalid authorization header' });
-  }
+  if (!authHeader?.startsWith('Bearer ')) return false;
 
   const token = authHeader.slice(7);
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
+  if (!token) return false;
 
   try {
     const { data: { user }, error } = await adminClient.auth.getUser(token);
-    if (error || !user) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
-    }
+    if (error || !user) return false;
 
-    // Create an authenticated client for user-level operations
     const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
     const supabaseUrl = process.env.SUPABASE_URL!;
     const authedClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -43,7 +35,6 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Fetch user's role from profiles
     const { data: profile } = await adminClient
       .from('profiles')
       .select('role')
@@ -52,10 +43,35 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
     req.user = { ...user, role: profile?.role || 'student' };
     req.supabaseClient = authedClient;
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: 'Authentication failed' });
+    return true;
+  } catch {
+    return false;
   }
+}
+
+/**
+ * JWT verification middleware.
+ * Extracts Bearer token from Authorization header and verifies with Supabase.
+ * Attaches `req.user` (verified user info) and `req.supabaseClient` on success.
+ * Blocks the request (401) if no valid token is present.
+ */
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const ok = await attachUserFromToken(req);
+  if (!ok) {
+    return res.status(401).json({ error: 'Missing or invalid authorization header' });
+  }
+  next();
+}
+
+/**
+ * Optional JWT verification middleware.
+ * Same as requireAuth but does NOT block unauthenticated requests.
+ * If a valid token is present, `req.user` and `req.supabaseClient` are set.
+ * If not, the request proceeds without them — route handlers must handle this gracefully.
+ */
+export async function optionalAuth(req: Request, res: Response, next: NextFunction) {
+  await attachUserFromToken(req);
+  next();
 }
 
 /**

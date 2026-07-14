@@ -1,11 +1,32 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { adminClient } from '../../lib/supabase-admin.js';
-import { requireAuth } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
 import { AppError } from '../../middleware/error.js';
 
 export const marketplaceRouter: Router = Router();
+
+/**
+ * Returns the Supabase client to use for the request.
+ * If the user is authenticated (req.supabaseClient is set), uses that.
+ * Otherwise falls back to adminClient so unauthenticated users can
+ * browse public listings and reviews.
+ */
+function getDb(req: Request) {
+  return req.supabaseClient || adminClient;
+}
+
+/**
+ * Returns a 401 error if the request has no authenticated user.
+ * Call at the top of any route that requires a logged-in user.
+ */
+function requireUser(req: Request, res: Response): boolean {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required' });
+    return false;
+  }
+  return true;
+}
 
 // ── Helpers ──
 
@@ -39,19 +60,21 @@ function canTransition(current: string, next: string): boolean {
 }
 
 // ════════════════════════════════════════
-// PUBLIC MARKETPLACE ROUTES (No Auth Needed)
+// LISTINGS
 // ════════════════════════════════════════
 
-// GET /services — list active services
-marketplaceRouter.get('/services', async (_req: Request, res: Response) => {
-  const { data, error } = await adminClient.from('services').select('*').eq('is_active', true).order('name');
+// GET /services — list active services (public)
+marketplaceRouter.get('/services', async (req: Request, res: Response) => {
+  const supabase = getDb(req);
+  const { data, error } = await supabase.from('services').select('*').eq('is_active', true).order('name');
   if (error) throw new AppError(500, error.message);
   res.json({ data });
 });
 
-// GET /listings — list marketplace listings with filters
+// GET /listings — list marketplace listings with filters (public)
 marketplaceRouter.get('/listings', async (req: Request, res: Response) => {
-  let query = adminClient
+  const supabase = getDb(req);
+  let query = supabase
     .from('marketplace_listings')
     .select(`*, service:services(id, name, slug, category, description), provider:profiles(id, full_name, avatar_url, headline)`, { count: 'exact' });
 
@@ -66,18 +89,9 @@ marketplaceRouter.get('/listings', async (req: Request, res: Response) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
   const offset = (page - 1) * limit;
 
-  if (mine) {
-    if (!req.user) {
-      throw new AppError(401, 'Authentication required to view your listings');
-    }
-    query = query.eq('provider_id', req.user.id);
-  }
-  // If no status specified, default to active for public
-  if (status) {
-    query = query.eq('status', status);
-  } else if (!mine) {
-    query = query.eq('status', 'active');
-  }
+  // Only filter by "mine" if user is authenticated
+  if (mine && req.user) query = query.eq('provider_id', req.user.id);
+  if (status) query = query.eq('status', status);
   if (category) query = query.eq('service.category', category);
   if (search) query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
   if (minPrice) query = query.gte('price', parseFloat(minPrice));
@@ -92,9 +106,10 @@ marketplaceRouter.get('/listings', async (req: Request, res: Response) => {
   res.json({ data, count, page, limit, offset });
 });
 
-// GET /listings/:id — single listing detail
+// GET /listings/:id — single listing detail (public)
 marketplaceRouter.get('/listings/:id', async (req: Request, res: Response) => {
-  const { data, error } = await adminClient
+  const supabase = getDb(req);
+  const { data, error } = await supabase
     .from('marketplace_listings')
     .select('*, service:services(*), provider:profiles(id, full_name, avatar_url, headline, bio)')
     .eq('id', req.params.id)
@@ -103,76 +118,8 @@ marketplaceRouter.get('/listings/:id', async (req: Request, res: Response) => {
   res.json({ data });
 });
 
-// GET /reviews/listing/:id/stats
-marketplaceRouter.get('/reviews/listing/:id/stats', async (req: Request, res: Response) => {
-  const { data, error } = await adminClient
-    .from('orders')
-    .select('rating')
-    .eq('listing_id', req.params.id)
-    .eq('status', 'completed')
-    .not('rating', 'is', null);
-  if (error) throw new AppError(500, error.message);
-
-  const ratings = (data || []).map((r: any) => r.rating);
-  const count = ratings.length;
-  const average = count > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / count : 0;
-  res.json({ data: { average: Math.round(average * 10) / 10, count } });
-});
-
-// GET /reviews/listing/:id
-marketplaceRouter.get('/reviews/listing/:id', async (req: Request, res: Response) => {
-  const { data, error } = await adminClient
-    .from('orders')
-    .select('id, rating, review, created_at, buyer:profiles!orders_buyer_id_fkey(id, full_name, avatar_url)')
-    .eq('listing_id', req.params.id)
-    .eq('status', 'completed')
-    .not('rating', 'is', null)
-    .not('review', 'is', null)
-    .order('created_at', { ascending: false });
-  if (error) throw new AppError(500, error.message);
-  res.json({ data });
-});
-
-// GET /reviews/provider/:id/stats
-marketplaceRouter.get('/reviews/provider/:id/stats', async (req: Request, res: Response) => {
-  const { data, error } = await adminClient
-    .from('orders')
-    .select('rating')
-    .eq('provider_id', req.params.id)
-    .eq('status', 'completed')
-    .not('rating', 'is', null);
-  if (error) throw new AppError(500, error.message);
-
-  const ratings = (data || []).map((r: any) => r.rating);
-  const count = ratings.length;
-  const average = count > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / count : 0;
-  res.json({ data: { average: Math.round(average * 10) / 10, count } });
-});
-
-// GET /reviews/provider/:id
-marketplaceRouter.get('/reviews/provider/:id', async (req: Request, res: Response) => {
-  const { data, error } = await adminClient
-    .from('orders')
-    .select('id, rating, review, created_at, listing:marketplace_listings!inner(id, title), buyer:profiles!orders_buyer_id_fkey(id, full_name, avatar_url)')
-    .eq('provider_id', req.params.id)
-    .eq('status', 'completed')
-    .not('rating', 'is', null)
-    .not('review', 'is', null)
-    .order('created_at', { ascending: false });
-  if (error) throw new AppError(500, error.message);
-  res.json({ data });
-});
-
-// ════════════════════════════════════════
-// PROTECTED MARKETPLACE ROUTES (Require Auth)
-// ════════════════════════════════════════
-
-const protectedMarketplaceRouter: Router = Router();
-protectedMarketplaceRouter.use(requireAuth);
-
-// LISTINGS
-// POST /listings — create a new listing
-protectedMarketplaceRouter.post('/listings',
+// POST /listings — create a new listing (auth required)
+marketplaceRouter.post('/listings',
   validate(z.object({
     title: z.string().min(1),
     description: z.string().min(1),
@@ -181,7 +128,8 @@ protectedMarketplaceRouter.post('/listings',
     duration_hours: z.number().min(1),
   })),
   async (req: Request, res: Response) => {
-    const supabase = req.supabaseClient!;
+    if (!requireUser(req, res)) return;
+    const supabase = getDb(req);
     const { title, description, price, service_id, duration_hours } = req.body;
 
     const { data, error } = await supabase
@@ -194,9 +142,10 @@ protectedMarketplaceRouter.post('/listings',
   }
 );
 
-// PATCH /listings/:id — update listing (owner or admin)
-protectedMarketplaceRouter.patch('/listings/:id', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// PATCH /listings/:id — update listing (auth required, owner or admin)
+marketplaceRouter.patch('/listings/:id', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const userIsAdmin = await isAdmin(req.user!.id);
   const body = req.body;
 
@@ -234,9 +183,10 @@ protectedMarketplaceRouter.patch('/listings/:id', async (req: Request, res: Resp
   res.json({ data });
 });
 
-// DELETE /listings/:id — delete listing (owner or admin)
-protectedMarketplaceRouter.delete('/listings/:id', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// DELETE /listings/:id — delete listing (auth required, owner or admin)
+marketplaceRouter.delete('/listings/:id', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const userIsAdmin = await isAdmin(req.user!.id);
 
   // Fetch before deleting so we can notify the owner
@@ -263,10 +213,14 @@ protectedMarketplaceRouter.delete('/listings/:id', async (req: Request, res: Res
   res.json({ data });
 });
 
+// ════════════════════════════════════════
 // ORDERS
-// GET /orders — list orders with filters
-protectedMarketplaceRouter.get('/orders', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// ════════════════════════════════════════
+
+// GET /orders — list orders with filters (auth required)
+marketplaceRouter.get('/orders', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const role = req.query.role as string | undefined;
   const status = req.query.status as string | undefined;
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
@@ -287,9 +241,10 @@ protectedMarketplaceRouter.get('/orders', async (req: Request, res: Response) =>
   res.json({ data, limit, offset });
 });
 
-// GET /orders/:id — single order (participant only)
-protectedMarketplaceRouter.get('/orders/:id', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// GET /orders/:id — single order (auth required, participant only)
+marketplaceRouter.get('/orders/:id', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { data, error } = await supabase
     .from('orders')
     .select('*, listing:marketplace_listings(*), buyer:profiles!buyer_id(id, full_name, avatar_url, headline), provider:profiles!provider_id(id, full_name, avatar_url, headline)')
@@ -301,9 +256,10 @@ protectedMarketplaceRouter.get('/orders/:id', async (req: Request, res: Response
   res.json({ data });
 });
 
-// POST /orders — create order
-protectedMarketplaceRouter.post('/orders', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// POST /orders — create order (auth required)
+marketplaceRouter.post('/orders', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { listing_id } = req.body;
   if (!listing_id) throw new AppError(400, 'Missing listing_id');
 
@@ -328,9 +284,10 @@ protectedMarketplaceRouter.post('/orders', async (req: Request, res: Response) =
   res.status(201).json({ data });
 });
 
-// PATCH /orders/:id — update order status
-protectedMarketplaceRouter.patch('/orders/:id', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// PATCH /orders/:id — update order status (auth required)
+marketplaceRouter.patch('/orders/:id', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { status: newStatus, rating, review, dispute_reason, dispute_description } = req.body;
   if (!newStatus) throw new AppError(400, 'Missing status');
 
@@ -391,10 +348,12 @@ protectedMarketplaceRouter.patch('/orders/:id', async (req: Request, res: Respon
   res.json({ data });
 });
 
-// MILESTONES
-// GET /orders/:id/milestones
-protectedMarketplaceRouter.get('/orders/:id/milestones', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// ── Milestones ──
+
+// GET /orders/:id/milestones (auth required)
+marketplaceRouter.get('/orders/:id/milestones', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { data: order } = await supabase.from('orders').select('id').eq('id', req.params.id).or(`buyer_id.eq.${req.user!.id},provider_id.eq.${req.user!.id}`).maybeSingle();
   if (!order) throw new AppError(403, 'Access denied');
 
@@ -403,9 +362,10 @@ protectedMarketplaceRouter.get('/orders/:id/milestones', async (req: Request, re
   res.json({ data });
 });
 
-// POST /orders/:id/milestones — create milestone (provider only)
-protectedMarketplaceRouter.post('/orders/:id/milestones', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// POST /orders/:id/milestones — create milestone (auth required, provider only)
+marketplaceRouter.post('/orders/:id/milestones', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { title, description, amount, due_date } = req.body;
   if (!title || !title.trim() || !amount) throw new AppError(400, 'Title and amount required');
 
@@ -425,9 +385,10 @@ protectedMarketplaceRouter.post('/orders/:id/milestones', async (req: Request, r
   res.status(201).json({ data });
 });
 
-// PATCH /orders/:id/milestones/:mid — update milestone status
-protectedMarketplaceRouter.patch('/orders/:id/milestones/:mid', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// PATCH /orders/:id/milestones/:mid — update milestone status (auth required)
+marketplaceRouter.patch('/orders/:id/milestones/:mid', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { status: newStatus } = req.body;
   if (!newStatus) throw new AppError(400, 'Missing status');
 
@@ -458,10 +419,14 @@ protectedMarketplaceRouter.patch('/orders/:id/milestones/:mid', async (req: Requ
   res.json({ data });
 });
 
+// ════════════════════════════════════════
 // DISPUTES
-// GET /disputes — list disputes for current user
-protectedMarketplaceRouter.get('/disputes', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// ════════════════════════════════════════
+
+// GET /disputes — list disputes for current user (auth required)
+marketplaceRouter.get('/disputes', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { data: userOrders } = await supabase.from('orders').select('id').or(`buyer_id.eq.${req.user!.id},provider_id.eq.${req.user!.id}`);
   const orderIds = (userOrders || []).map((o: any) => o.id);
 
@@ -474,9 +439,10 @@ protectedMarketplaceRouter.get('/disputes', async (req: Request, res: Response) 
   res.json({ data: data || [] });
 });
 
-// GET /disputes/:id — single dispute
-protectedMarketplaceRouter.get('/disputes/:id', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// GET /disputes/:id — single dispute (auth required)
+marketplaceRouter.get('/disputes/:id', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { data, error } = await supabase
     .from('disputes')
     .select('*, order:orders(id, title, amount, status), raised_by_profile:profiles!raised_by(id, full_name, avatar_url), resolved_by_profile:profiles!resolved_by(id, full_name)')
@@ -497,17 +463,19 @@ protectedMarketplaceRouter.get('/disputes/:id', async (req: Request, res: Respon
   res.json({ data });
 });
 
-// GET /disputes/:id/messages — list messages
-protectedMarketplaceRouter.get('/disputes/:id/messages', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// GET /disputes/:id/messages — list messages (auth required)
+marketplaceRouter.get('/disputes/:id/messages', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { data, error } = await supabase.from('dispute_messages').select('*, sender:profiles(id, full_name, avatar_url)').eq('dispute_id', req.params.id).order('created_at', { ascending: true });
   if (error) throw new AppError(500, error.message);
   res.json({ data: data || [] });
 });
 
-// POST /disputes/:id/messages — send message
-protectedMarketplaceRouter.post('/disputes/:id/messages', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// POST /disputes/:id/messages — send message (auth required)
+marketplaceRouter.post('/disputes/:id/messages', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { message } = req.body;
   if (!message || !message.trim()) throw new AppError(400, 'Message is required');
 
@@ -527,10 +495,78 @@ protectedMarketplaceRouter.post('/disputes/:id/messages', async (req: Request, r
   res.status(201).json({ data });
 });
 
+// ════════════════════════════════════════
 // REVIEWS
-// POST /reviews/orders/:id — submit review on completed order
-protectedMarketplaceRouter.post('/reviews/orders/:id', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// ════════════════════════════════════════
+
+// GET /reviews/listing/:id/stats (public)
+marketplaceRouter.get('/reviews/listing/:id/stats', async (req: Request, res: Response) => {
+  const supabase = getDb(req);
+  const { data, error } = await supabase
+    .from('orders')
+    .select('rating')
+    .eq('listing_id', req.params.id)
+    .eq('status', 'completed')
+    .not('rating', 'is', null);
+  if (error) throw new AppError(500, error.message);
+
+  const ratings = (data || []).map((r: any) => r.rating);
+  const count = ratings.length;
+  const average = count > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / count : 0;
+  res.json({ data: { average: Math.round(average * 10) / 10, count } });
+});
+
+// GET /reviews/listing/:id (public)
+marketplaceRouter.get('/reviews/listing/:id', async (req: Request, res: Response) => {
+  const supabase = getDb(req);
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, rating, review, created_at, buyer:profiles!orders_buyer_id_fkey(id, full_name, avatar_url)')
+    .eq('listing_id', req.params.id)
+    .eq('status', 'completed')
+    .not('rating', 'is', null)
+    .not('review', 'is', null)
+    .order('created_at', { ascending: false });
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// GET /reviews/provider/:id/stats (public)
+marketplaceRouter.get('/reviews/provider/:id/stats', async (req: Request, res: Response) => {
+  const supabase = getDb(req);
+  const { data, error } = await supabase
+    .from('orders')
+    .select('rating')
+    .eq('provider_id', req.params.id)
+    .eq('status', 'completed')
+    .not('rating', 'is', null);
+  if (error) throw new AppError(500, error.message);
+
+  const ratings = (data || []).map((r: any) => r.rating);
+  const count = ratings.length;
+  const average = count > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / count : 0;
+  res.json({ data: { average: Math.round(average * 10) / 10, count } });
+});
+
+// GET /reviews/provider/:id (public)
+marketplaceRouter.get('/reviews/provider/:id', async (req: Request, res: Response) => {
+  const supabase = getDb(req);
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, rating, review, created_at, listing:marketplace_listings!inner(id, title), buyer:profiles!orders_buyer_id_fkey(id, full_name, avatar_url)')
+    .eq('provider_id', req.params.id)
+    .eq('status', 'completed')
+    .not('rating', 'is', null)
+    .not('review', 'is', null)
+    .order('created_at', { ascending: false });
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// POST /reviews/orders/:id — submit review on completed order (auth required)
+marketplaceRouter.post('/reviews/orders/:id', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { rating, review } = req.body;
   if (!rating || rating < 1 || rating > 5) throw new AppError(400, 'Rating must be between 1 and 5');
   if (!review || review.trim().length < 10) throw new AppError(400, 'Review must be at least 10 characters');
@@ -545,9 +581,10 @@ protectedMarketplaceRouter.post('/reviews/orders/:id', async (req: Request, res:
   res.json({ data });
 });
 
-// PUT /reviews/orders/:id — edit existing review
-protectedMarketplaceRouter.put('/reviews/orders/:id', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// PUT /reviews/orders/:id — edit existing review (auth required)
+marketplaceRouter.put('/reviews/orders/:id', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { rating, review } = req.body;
   if (rating !== undefined && (rating < 1 || rating > 5)) throw new AppError(400, 'Rating must be between 1 and 5');
   if (review !== undefined && review.trim().length < 10) throw new AppError(400, 'Review must be at least 10 characters');
@@ -566,9 +603,10 @@ protectedMarketplaceRouter.put('/reviews/orders/:id', async (req: Request, res: 
   res.json({ data });
 });
 
-// DELETE /reviews/orders/:id — delete review (buyer or admin)
-protectedMarketplaceRouter.delete('/reviews/orders/:id', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
+// DELETE /reviews/orders/:id — delete review (auth required, buyer or admin)
+marketplaceRouter.delete('/reviews/orders/:id', async (req: Request, res: Response) => {
+  if (!requireUser(req, res)) return;
+  const supabase = getDb(req);
   const { data: order, error: orderError } = await supabase.from('orders').select('id, buyer_id').eq('id', req.params.id).single();
   if (orderError || !order) throw new AppError(404, 'Order not found');
 
@@ -579,6 +617,3 @@ protectedMarketplaceRouter.delete('/reviews/orders/:id', async (req: Request, re
   if (error) throw new AppError(500, error.message);
   res.json({ data: { id: req.params.id } });
 });
-
-// Attach protected router to main marketplace router
-marketplaceRouter.use(protectedMarketplaceRouter);
