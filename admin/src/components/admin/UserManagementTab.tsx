@@ -33,6 +33,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Search, Plus, Trash2, ShieldAlert, Save, X, MapPin, Building2, Globe, Tag, Calendar, Clock, User, Briefcase, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadCSV } from '@/lib/export';
+import { adminApi, type AdminRole } from '@/lib/api-client';
+import RoleManager from './RoleManager';
 
 interface AdminProfile {
   id: string;
@@ -62,24 +64,12 @@ interface FullProfile {
   updated_at: string;
 }
 
-const ALL_ROLES = [
-  'super_admin', 'admin', 'provider', 'buyer', 'moderator', 'student', 'firm',
-] as const;
-
-const ROLE_STYLES: Record<string, string> = {
-  super_admin: 'bg-red-500/15 text-red-700',
-  admin: 'bg-blue-500/15 text-blue-700',
-  provider: 'bg-green-500/15 text-green-700',
-  buyer: 'bg-purple-500/15 text-purple-700',
-  moderator: 'bg-yellow-500/15 text-yellow-700',
-  student: 'bg-muted text-muted-foreground',
-  firm: 'bg-orange-500/15 text-orange-700',
-};
-
 export default function UserManagementTab() {
   const [users, setUsers] = useState<AdminProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [rolesLoading, setRolesLoading] = useState(false);
   const [changingRole, setChangingRole] = useState<string | null>(null);
 
   // Add user dialog
@@ -113,7 +103,7 @@ export default function UserManagementTab() {
   const [editCurrency, setEditCurrency] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { fetchUsers(); fetchRoles(); }, []);
 
   useEffect(() => {
     if (!profileUserId) { setProfile(null); return; }
@@ -133,6 +123,17 @@ export default function UserManagementTab() {
     } catch (err) {
       toast.error('Failed to load users');
     } finally { setLoading(false); }
+  };
+
+  const fetchRoles = async () => {
+    setRolesLoading(true);
+    try {
+      const res = await adminApi.roles();
+      setRoles(res.data || []);
+    } catch {
+    } finally {
+      setRolesLoading(false);
+    }
   };
 
   const fetchProfile = async (userId: string) => {
@@ -298,6 +299,9 @@ export default function UserManagementTab() {
 
   return (
     <>
+      <div className="mb-6">
+        <RoleManager onRolesChange={fetchRoles} />
+      </div>
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -362,9 +366,9 @@ export default function UserManagementTab() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {ALL_ROLES.map((r) => (
-                          <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>
-                        ))}
+{roles.map((r) => (
+  <SelectItem key={r.name} value={r.name}>{r.name.replace('_', ' ')}</SelectItem>
+))}
                       </SelectContent>
                     </Select>
                   </TableCell>
@@ -415,8 +419,8 @@ export default function UserManagementTab() {
               <Select value={newRole} onValueChange={setNewRole}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {ALL_ROLES.map((r) => (
-                    <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>
+                  {roles.map((r) => (
+                    <SelectItem key={r.name} value={r.name}>{r.name.replace('_', ' ')}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -510,8 +514,8 @@ export default function UserManagementTab() {
                   <Select value={editRole} onValueChange={setEditRole}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {ALL_ROLES.map((r) => (
-                        <SelectItem key={r} value={r}>{r.replace('_', ' ')}</SelectItem>
+                      {roles.map((r) => (
+                        <SelectItem key={r.name} value={r.name}>{r.name.replace('_', ' ')}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

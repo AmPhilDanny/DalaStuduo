@@ -44,6 +44,7 @@ import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
 import { downloadCSV } from '@/lib/export';
+import { usePermissions } from '@/hooks/usePermissions';
 import SiteSettingsTab from '@/components/admin/SiteSettingsTab';
 import UserManagementTab from '@/components/admin/UserManagementTab';
 
@@ -110,6 +111,7 @@ const ORDER_STATUS_STYLES: Record<string, string> = {
 
 export default function AdminDashboard() {
   const { user, profile, isLoading: authLoading, signOut } = useAuth();
+  const { hasPermission, loading: permLoading } = usePermissions();
   const [activeTab, setActiveTab] = useState('services');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -213,20 +215,20 @@ export default function AdminDashboard() {
 
   const isAdminAccess = Boolean(
     user && (
-      profile?.role === 'admin' ||
+      hasPermission('access_admin') ||
       user.email?.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase()
     )
   );
 
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || permLoading) return;
     if (user && isAdminAccess) {
       setCheckingAuth(false);
       fetchAll();
     } else {
       setCheckingAuth(false);
     }
-  }, [user, profile, authLoading, isAdminAccess]);
+  }, [user, profile, authLoading, isAdminAccess, permLoading]);
 
   const handleSignIn = async () => {
     setSigningIn(true);
