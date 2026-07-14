@@ -1,7 +1,5 @@
 import 'dotenv/config';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import express, { Express, Request, Response, NextFunction } from 'express';
+import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import pino from 'pino';
@@ -21,9 +19,6 @@ import { notificationsRouter } from './routes/notifications/index.js';
 import { webhooksRouter } from './routes/webhooks/index.js';
 import { emailRouter } from './routes/email/index.js';
 import { githubRouter } from './routes/github/index.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const logger = pino({ name: 'skillbridge-server' });
 const app: Express = express();
@@ -108,25 +103,6 @@ app.use('/api/github', requireAuth, githubRouter);
 
 // ── Admin Routes (auth + admin role) ──
 app.use('/api/admin', requireAuth, adminRouter);
-
-// ── Frontend Static Files (Vite SPA output) ──
-const frontendDist = path.resolve(__dirname, '../../Skillbridge/dist');
-app.use(express.static(frontendDist, {
-  maxAge: '1y',
-  immutable: true,
-  setHeaders(res, filePath) {
-    // Assets with hashes in filename can be cached aggressively
-    if (filePath.includes('/assets/')) {
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    }
-  },
-}));
-
-// ── SPA Fallback: serve index.html for any non-API GET route ──
-app.use((req: Request, res: Response, next: NextFunction) => {
-  if (req.path.startsWith('/api/')) return next();
-  res.sendFile(path.join(frontendDist, 'index.html'));
-});
 
 // ── Error Handler ──
 app.use(errorHandler);
