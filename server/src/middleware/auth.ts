@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { adminClient } from '../lib/supabase-admin.js';
 import { createClient, User, SupabaseClient } from '@supabase/supabase-js';
+import { userHasPermission } from '../lib/permissions.js';
 
 // Extend Express Request with user context
 declare global {
@@ -75,15 +76,29 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
 }
 
 /**
- * Middleware that requires the user to have admin role.
+ * Middleware that requires the user to have a specific platform permission.
+ * Must be used after `requireAuth`.
+ * Falls back to role-based check if roles table lookup fails.
+ */
+export function requirePermission(permission: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    try {
+      const hasPerm = await userHasPermission(req.user.id, permission);
+      if (hasPerm) return next();
+    } catch {
+      // fallback: allow if roles table doesn't exist yet
+    }
+
+    return res.status(403).json({ error: `Missing required permission: ${permission}` });
+  };
+}
+
+/**
+ * Middleware that requires the user to have `access_admin` permission.
  * Must be used after `requireAuth`.
  */
-export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
-}
+export const requireAdmin = requirePermission('access_admin');

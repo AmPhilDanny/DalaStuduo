@@ -494,3 +494,78 @@ adminRouter.patch('/config',
     res.json({ data: { key, value } });
   }
 );
+
+// ════════════════════════════════════════
+// ROLE MANAGEMENT
+// ════════════════════════════════════════
+
+// ── GET /admin/roles ──
+adminRouter.get('/roles', async (_req: Request, res: Response) => {
+  const { data, error } = await adminClient
+    .from('roles')
+    .select('*')
+    .order('scope')
+    .order('name');
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// ── POST /admin/roles ──
+adminRouter.post('/roles',
+  validate(z.object({
+    name: z.string().min(1).max(100),
+    scope: z.enum(['platform', 'org']),
+    description: z.string().optional().default(''),
+    permissions: z.record(z.boolean()).optional().default({}),
+  })),
+  async (req: Request, res: Response) => {
+    const { name, scope, description, permissions } = req.body;
+    const { data, error } = await adminClient
+      .from('roles')
+      .insert({ name, scope, description: description || null, permissions, is_system_role: false })
+      .select()
+      .single();
+    if (error) {
+      if (error.code === '23505') throw new AppError(409, `Role "${name}" with scope "${scope}" already exists`);
+      throw new AppError(500, error.message);
+    }
+    res.status(201).json({ data });
+  }
+);
+
+// ── PATCH /admin/roles/:id ──
+adminRouter.patch('/roles/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const body = req.body;
+
+  // Prevent renaming/descoping system roles
+  if (body.name || body.scope) {
+    const { data: existing } = await adminClient.from('roles').select('is_system_role').eq('id', id).single();
+    if (existing?.is_system_role) throw new AppError(403, 'Cannot rename or change scope of system roles');
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (body.name !== undefined) updates.name = body.name;
+  if (body.scope !== undefined) updates.scope = body.scope;
+  if (body.description !== undefined) updates.description = body.description;
+  if (body.permissions !== undefined) updates.permissions = body.permissions;
+  if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update');
+  updates.updated_at = new Date().toISOString();
+
+  const { data, error } = await adminClient.from('roles').update(updates).eq('id', id).select().single();
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// ── DELETE /admin/roles/:id ──
+adminRouter.delete('/roles/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const { data: existing } = await adminClient.from('roles').select('is_system_role').eq('id', id).single();
+  if (!existing) throw new AppError(404, 'Role not found');
+  if (existing.is_system_role) throw new AppError(403, 'Cannot delete system roles');
+
+  const { data, error } = await adminClient.from('roles').delete().eq('id', id).select().single();
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});

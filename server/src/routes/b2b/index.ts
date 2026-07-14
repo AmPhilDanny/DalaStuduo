@@ -1,8 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { adminClient } from '../../lib/supabase-admin.js';
 import { AppError } from '../../middleware/error.js';
+import { requirePermission } from '../../middleware/auth.js';
 
 export const b2bRouter: Router = Router();
+
+// All B2B routes require access_b2b permission on the user's platform role
+b2bRouter.use(requirePermission('access_b2b'));
 
 const ORG_ADMIN_ROLES = ['owner', 'admin'] as const;
 const ORG_MANAGER_ROLES = ['owner', 'admin', 'manager'] as const;
