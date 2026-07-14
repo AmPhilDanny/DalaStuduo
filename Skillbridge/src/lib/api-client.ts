@@ -228,7 +228,7 @@ export const projectsApi = {
   getRoles: (id: string) => get(`/projects/${id}/roles`),
   create: (data: { title: string; description: string; project_type?: string; roles?: Array<{ role_title: string; description?: string }> }) => post('/projects', data),
   apply: (projectId: string, data: { role_id: string; message?: string }) => post(`/projects/${projectId}/apply`, data),
-  decide: (projectId: string, data: { application_id: string; status: 'approved' | 'rejected' }) => post(`/projects/${projectId}/decide`, data),
+  decide: (projectId: string, data: { application_id: string; status: 'accepted' | 'rejected' }) => post(`/projects/${projectId}/decide`, data),
 };
 
 // ── B2B API helpers ──
