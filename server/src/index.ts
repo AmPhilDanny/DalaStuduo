@@ -41,7 +41,7 @@ const PORT = parseInt(process.env.PORT || '4001', 10);
 
 // ── Global Middleware ──
 app.use(helmet());
-app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:4000', 'https://*.onrender.com'], credentials: true }));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 
 // Request logging

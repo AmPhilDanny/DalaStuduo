@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { adminClient } from '../../lib/supabase-admin.js';
+import { requireAuth } from '../../middleware/auth.js';
 import { validate } from '../../middleware/validate.js';
 import { AppError } from '../../middleware/error.js';
 
@@ -38,7 +39,7 @@ function canTransition(current: string, next: string): boolean {
 }
 
 // ════════════════════════════════════════
-// LISTINGS
+// PUBLIC MARKETPLACE ROUTES (No Auth Needed)
 // ════════════════════════════════════════
 
 // GET /services — list active services
@@ -102,8 +103,76 @@ marketplaceRouter.get('/listings/:id', async (req: Request, res: Response) => {
   res.json({ data });
 });
 
+// GET /reviews/listing/:id/stats
+marketplaceRouter.get('/reviews/listing/:id/stats', async (req: Request, res: Response) => {
+  const { data, error } = await adminClient
+    .from('orders')
+    .select('rating')
+    .eq('listing_id', req.params.id)
+    .eq('status', 'completed')
+    .not('rating', 'is', null);
+  if (error) throw new AppError(500, error.message);
+
+  const ratings = (data || []).map((r: any) => r.rating);
+  const count = ratings.length;
+  const average = count > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / count : 0;
+  res.json({ data: { average: Math.round(average * 10) / 10, count } });
+});
+
+// GET /reviews/listing/:id
+marketplaceRouter.get('/reviews/listing/:id', async (req: Request, res: Response) => {
+  const { data, error } = await adminClient
+    .from('orders')
+    .select('id, rating, review, created_at, buyer:profiles!orders_buyer_id_fkey(id, full_name, avatar_url)')
+    .eq('listing_id', req.params.id)
+    .eq('status', 'completed')
+    .not('rating', 'is', null)
+    .not('review', 'is', null)
+    .order('created_at', { ascending: false });
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// GET /reviews/provider/:id/stats
+marketplaceRouter.get('/reviews/provider/:id/stats', async (req: Request, res: Response) => {
+  const { data, error } = await adminClient
+    .from('orders')
+    .select('rating')
+    .eq('provider_id', req.params.id)
+    .eq('status', 'completed')
+    .not('rating', 'is', null);
+  if (error) throw new AppError(500, error.message);
+
+  const ratings = (data || []).map((r: any) => r.rating);
+  const count = ratings.length;
+  const average = count > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / count : 0;
+  res.json({ data: { average: Math.round(average * 10) / 10, count } });
+});
+
+// GET /reviews/provider/:id
+marketplaceRouter.get('/reviews/provider/:id', async (req: Request, res: Response) => {
+  const { data, error } = await adminClient
+    .from('orders')
+    .select('id, rating, review, created_at, listing:marketplace_listings!inner(id, title), buyer:profiles!orders_buyer_id_fkey(id, full_name, avatar_url)')
+    .eq('provider_id', req.params.id)
+    .eq('status', 'completed')
+    .not('rating', 'is', null)
+    .not('review', 'is', null)
+    .order('created_at', { ascending: false });
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// ════════════════════════════════════════
+// PROTECTED MARKETPLACE ROUTES (Require Auth)
+// ════════════════════════════════════════
+
+const protectedMarketplaceRouter: Router = Router();
+protectedMarketplaceRouter.use(requireAuth);
+
+// LISTINGS
 // POST /listings — create a new listing
-marketplaceRouter.post('/listings',
+protectedMarketplaceRouter.post('/listings',
   validate(z.object({
     title: z.string().min(1),
     description: z.string().min(1),
@@ -126,7 +195,7 @@ marketplaceRouter.post('/listings',
 );
 
 // PATCH /listings/:id — update listing (owner or admin)
-marketplaceRouter.patch('/listings/:id', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.patch('/listings/:id', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const userIsAdmin = await isAdmin(req.user!.id);
   const body = req.body;
@@ -166,7 +235,7 @@ marketplaceRouter.patch('/listings/:id', async (req: Request, res: Response) => 
 });
 
 // DELETE /listings/:id — delete listing (owner or admin)
-marketplaceRouter.delete('/listings/:id', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.delete('/listings/:id', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const userIsAdmin = await isAdmin(req.user!.id);
 
@@ -194,12 +263,9 @@ marketplaceRouter.delete('/listings/:id', async (req: Request, res: Response) =>
   res.json({ data });
 });
 
-// ════════════════════════════════════════
 // ORDERS
-// ════════════════════════════════════════
-
 // GET /orders — list orders with filters
-marketplaceRouter.get('/orders', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.get('/orders', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const role = req.query.role as string | undefined;
   const status = req.query.status as string | undefined;
@@ -222,7 +288,7 @@ marketplaceRouter.get('/orders', async (req: Request, res: Response) => {
 });
 
 // GET /orders/:id — single order (participant only)
-marketplaceRouter.get('/orders/:id', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.get('/orders/:id', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { data, error } = await supabase
     .from('orders')
@@ -236,7 +302,7 @@ marketplaceRouter.get('/orders/:id', async (req: Request, res: Response) => {
 });
 
 // POST /orders — create order
-marketplaceRouter.post('/orders', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.post('/orders', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { listing_id } = req.body;
   if (!listing_id) throw new AppError(400, 'Missing listing_id');
@@ -263,7 +329,7 @@ marketplaceRouter.post('/orders', async (req: Request, res: Response) => {
 });
 
 // PATCH /orders/:id — update order status
-marketplaceRouter.patch('/orders/:id', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.patch('/orders/:id', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { status: newStatus, rating, review, dispute_reason, dispute_description } = req.body;
   if (!newStatus) throw new AppError(400, 'Missing status');
@@ -325,10 +391,9 @@ marketplaceRouter.patch('/orders/:id', async (req: Request, res: Response) => {
   res.json({ data });
 });
 
-// ── Milestones ──
-
+// MILESTONES
 // GET /orders/:id/milestones
-marketplaceRouter.get('/orders/:id/milestones', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.get('/orders/:id/milestones', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { data: order } = await supabase.from('orders').select('id').eq('id', req.params.id).or(`buyer_id.eq.${req.user!.id},provider_id.eq.${req.user!.id}`).maybeSingle();
   if (!order) throw new AppError(403, 'Access denied');
@@ -339,7 +404,7 @@ marketplaceRouter.get('/orders/:id/milestones', async (req: Request, res: Respon
 });
 
 // POST /orders/:id/milestones — create milestone (provider only)
-marketplaceRouter.post('/orders/:id/milestones', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.post('/orders/:id/milestones', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { title, description, amount, due_date } = req.body;
   if (!title || !title.trim() || !amount) throw new AppError(400, 'Title and amount required');
@@ -361,7 +426,7 @@ marketplaceRouter.post('/orders/:id/milestones', async (req: Request, res: Respo
 });
 
 // PATCH /orders/:id/milestones/:mid — update milestone status
-marketplaceRouter.patch('/orders/:id/milestones/:mid', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.patch('/orders/:id/milestones/:mid', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { status: newStatus } = req.body;
   if (!newStatus) throw new AppError(400, 'Missing status');
@@ -393,12 +458,9 @@ marketplaceRouter.patch('/orders/:id/milestones/:mid', async (req: Request, res:
   res.json({ data });
 });
 
-// ════════════════════════════════════════
 // DISPUTES
-// ════════════════════════════════════════
-
 // GET /disputes — list disputes for current user
-marketplaceRouter.get('/disputes', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.get('/disputes', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { data: userOrders } = await supabase.from('orders').select('id').or(`buyer_id.eq.${req.user!.id},provider_id.eq.${req.user!.id}`);
   const orderIds = (userOrders || []).map((o: any) => o.id);
@@ -413,7 +475,7 @@ marketplaceRouter.get('/disputes', async (req: Request, res: Response) => {
 });
 
 // GET /disputes/:id — single dispute
-marketplaceRouter.get('/disputes/:id', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.get('/disputes/:id', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { data, error } = await supabase
     .from('disputes')
@@ -436,7 +498,7 @@ marketplaceRouter.get('/disputes/:id', async (req: Request, res: Response) => {
 });
 
 // GET /disputes/:id/messages — list messages
-marketplaceRouter.get('/disputes/:id/messages', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.get('/disputes/:id/messages', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { data, error } = await supabase.from('dispute_messages').select('*, sender:profiles(id, full_name, avatar_url)').eq('dispute_id', req.params.id).order('created_at', { ascending: true });
   if (error) throw new AppError(500, error.message);
@@ -444,7 +506,7 @@ marketplaceRouter.get('/disputes/:id/messages', async (req: Request, res: Respon
 });
 
 // POST /disputes/:id/messages — send message
-marketplaceRouter.post('/disputes/:id/messages', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.post('/disputes/:id/messages', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { message } = req.body;
   if (!message || !message.trim()) throw new AppError(400, 'Message is required');
@@ -465,72 +527,9 @@ marketplaceRouter.post('/disputes/:id/messages', async (req: Request, res: Respo
   res.status(201).json({ data });
 });
 
-// ════════════════════════════════════════
 // REVIEWS
-// ════════════════════════════════════════
-
-// GET /reviews/listing/:id/stats
-marketplaceRouter.get('/reviews/listing/:id/stats', async (req: Request, res: Response) => {
-  const { data, error } = await adminClient
-    .from('orders')
-    .select('rating')
-    .eq('listing_id', req.params.id)
-    .eq('status', 'completed')
-    .not('rating', 'is', null);
-  if (error) throw new AppError(500, error.message);
-
-  const ratings = (data || []).map((r: any) => r.rating);
-  const count = ratings.length;
-  const average = count > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / count : 0;
-  res.json({ data: { average: Math.round(average * 10) / 10, count } });
-});
-
-// GET /reviews/listing/:id
-marketplaceRouter.get('/reviews/listing/:id', async (req: Request, res: Response) => {
-  const { data, error } = await adminClient
-    .from('orders')
-    .select('id, rating, review, created_at, buyer:profiles!orders_buyer_id_fkey(id, full_name, avatar_url)')
-    .eq('listing_id', req.params.id)
-    .eq('status', 'completed')
-    .not('rating', 'is', null)
-    .not('review', 'is', null)
-    .order('created_at', { ascending: false });
-  if (error) throw new AppError(500, error.message);
-  res.json({ data });
-});
-
-// GET /reviews/provider/:id/stats
-marketplaceRouter.get('/reviews/provider/:id/stats', async (req: Request, res: Response) => {
-  const { data, error } = await adminClient
-    .from('orders')
-    .select('rating')
-    .eq('provider_id', req.params.id)
-    .eq('status', 'completed')
-    .not('rating', 'is', null);
-  if (error) throw new AppError(500, error.message);
-
-  const ratings = (data || []).map((r: any) => r.rating);
-  const count = ratings.length;
-  const average = count > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / count : 0;
-  res.json({ data: { average: Math.round(average * 10) / 10, count } });
-});
-
-// GET /reviews/provider/:id
-marketplaceRouter.get('/reviews/provider/:id', async (req: Request, res: Response) => {
-  const { data, error } = await adminClient
-    .from('orders')
-    .select('id, rating, review, created_at, listing:marketplace_listings!inner(id, title), buyer:profiles!orders_buyer_id_fkey(id, full_name, avatar_url)')
-    .eq('provider_id', req.params.id)
-    .eq('status', 'completed')
-    .not('rating', 'is', null)
-    .not('review', 'is', null)
-    .order('created_at', { ascending: false });
-  if (error) throw new AppError(500, error.message);
-  res.json({ data });
-});
-
 // POST /reviews/orders/:id — submit review on completed order
-marketplaceRouter.post('/reviews/orders/:id', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.post('/reviews/orders/:id', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { rating, review } = req.body;
   if (!rating || rating < 1 || rating > 5) throw new AppError(400, 'Rating must be between 1 and 5');
@@ -547,7 +546,7 @@ marketplaceRouter.post('/reviews/orders/:id', async (req: Request, res: Response
 });
 
 // PUT /reviews/orders/:id — edit existing review
-marketplaceRouter.put('/reviews/orders/:id', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.put('/reviews/orders/:id', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { rating, review } = req.body;
   if (rating !== undefined && (rating < 1 || rating > 5)) throw new AppError(400, 'Rating must be between 1 and 5');
@@ -568,7 +567,7 @@ marketplaceRouter.put('/reviews/orders/:id', async (req: Request, res: Response)
 });
 
 // DELETE /reviews/orders/:id — delete review (buyer or admin)
-marketplaceRouter.delete('/reviews/orders/:id', async (req: Request, res: Response) => {
+protectedMarketplaceRouter.delete('/reviews/orders/:id', async (req: Request, res: Response) => {
   const supabase = req.supabaseClient!;
   const { data: order, error: orderError } = await supabase.from('orders').select('id, buyer_id').eq('id', req.params.id).single();
   if (orderError || !order) throw new AppError(404, 'Order not found');
@@ -580,3 +579,6 @@ marketplaceRouter.delete('/reviews/orders/:id', async (req: Request, res: Respon
   if (error) throw new AppError(500, error.message);
   res.json({ data: { id: req.params.id } });
 });
+
+// Attach protected router to main marketplace router
+marketplaceRouter.use(protectedMarketplaceRouter);
