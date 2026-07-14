@@ -43,16 +43,14 @@ function canTransition(current: string, next: string): boolean {
 
 // GET /services — list active services
 marketplaceRouter.get('/services', async (_req: Request, res: Response) => {
-  const supabase = _req.supabaseClient!;
-  const { data, error } = await supabase.from('services').select('*').eq('is_active', true).order('name');
+  const { data, error } = await adminClient.from('services').select('*').eq('is_active', true).order('name');
   if (error) throw new AppError(500, error.message);
   res.json({ data });
 });
 
 // GET /listings — list marketplace listings with filters
 marketplaceRouter.get('/listings', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
-  let query = supabase
+  let query = adminClient
     .from('marketplace_listings')
     .select(`*, service:services(id, name, slug, category, description), provider:profiles(id, full_name, avatar_url, headline)`, { count: 'exact' });
 
@@ -95,8 +93,7 @@ marketplaceRouter.get('/listings', async (req: Request, res: Response) => {
 
 // GET /listings/:id — single listing detail
 marketplaceRouter.get('/listings/:id', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
-  const { data, error } = await supabase
+  const { data, error } = await adminClient
     .from('marketplace_listings')
     .select('*, service:services(*), provider:profiles(id, full_name, avatar_url, headline, bio)')
     .eq('id', req.params.id)
@@ -474,8 +471,7 @@ marketplaceRouter.post('/disputes/:id/messages', async (req: Request, res: Respo
 
 // GET /reviews/listing/:id/stats
 marketplaceRouter.get('/reviews/listing/:id/stats', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
-  const { data, error } = await supabase
+  const { data, error } = await adminClient
     .from('orders')
     .select('rating')
     .eq('listing_id', req.params.id)
@@ -491,8 +487,7 @@ marketplaceRouter.get('/reviews/listing/:id/stats', async (req: Request, res: Re
 
 // GET /reviews/listing/:id
 marketplaceRouter.get('/reviews/listing/:id', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
-  const { data, error } = await supabase
+  const { data, error } = await adminClient
     .from('orders')
     .select('id, rating, review, created_at, buyer:profiles!orders_buyer_id_fkey(id, full_name, avatar_url)')
     .eq('listing_id', req.params.id)
@@ -506,8 +501,7 @@ marketplaceRouter.get('/reviews/listing/:id', async (req: Request, res: Response
 
 // GET /reviews/provider/:id/stats
 marketplaceRouter.get('/reviews/provider/:id/stats', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
-  const { data, error } = await supabase
+  const { data, error } = await adminClient
     .from('orders')
     .select('rating')
     .eq('provider_id', req.params.id)
@@ -523,8 +517,7 @@ marketplaceRouter.get('/reviews/provider/:id/stats', async (req: Request, res: R
 
 // GET /reviews/provider/:id
 marketplaceRouter.get('/reviews/provider/:id', async (req: Request, res: Response) => {
-  const supabase = req.supabaseClient!;
-  const { data, error } = await supabase
+  const { data, error } = await adminClient
     .from('orders')
     .select('id, rating, review, created_at, listing:marketplace_listings!inner(id, title), buyer:profiles!orders_buyer_id_fkey(id, full_name, avatar_url)')
     .eq('provider_id', req.params.id)
