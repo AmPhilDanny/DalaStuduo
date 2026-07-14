@@ -184,7 +184,7 @@ projectsRouter.post('/:id/apply',
 // POST /:id/decide — owner approves/rejects an application (auth required, owner only)
 const decideSchema = z.object({
   application_id: z.string().uuid(),
-  status: z.enum(['approved', 'rejected']),
+  status: z.enum(['accepted', 'rejected']),
 });
 
 projectsRouter.post('/:id/decide',
@@ -211,8 +211,8 @@ projectsRouter.post('/:id/decide',
       .eq('id', application_id);
     if (appError) throw new AppError(500, appError.message);
 
-    // If approved, add as member and fill the role
-    if (status === 'approved') {
+    // If accepted, add as member and fill the role
+    if (status === 'accepted') {
       const { data: app } = await supabase
         .from('project_applications')
         .select('*, project_roles!inner(role_title)')

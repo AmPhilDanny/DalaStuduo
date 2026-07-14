@@ -19,6 +19,7 @@ interface ProjectRow {
   title: string;
   description: string;
   is_paid: boolean;
+  status: string | null;
   collaboration_type: string | null;
   project_status: string | null;
   github_url: string | null;

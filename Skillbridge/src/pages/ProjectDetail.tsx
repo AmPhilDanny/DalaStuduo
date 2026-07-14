@@ -16,6 +16,7 @@ import { Loader2, Users, CheckCircle2, XCircle, Clock, ArrowLeft, UserPlus } fro
 interface ProjectProfile { id: string; full_name: string | null; avatar_url: string | null; }
 interface ProjectRow {
   id: string; title: string; description: string; is_paid: boolean;
+  status: string | null;
   collaboration_type: string | null; project_status: string | null;
   github_url: string | null; deployment_url: string | null;
   owner_id: string; created_at: string;
@@ -98,10 +99,10 @@ export default function ProjectDetail() {
     }
   };
 
-  const handleDecision = async (application: ProjectApplication, decision: 'approved' | 'rejected') => {
+  const handleDecision = async (application: ProjectApplication, decision: 'accepted' | 'rejected') => {
     try {
       await projectsApi.decide(project!.id, { application_id: application.id, status: decision });
-      toast.success(decision === 'approved' ? 'Collaborator added to the project' : 'Application declined');
+      toast.success(decision === 'accepted' ? 'Collaborator added to the project' : 'Application declined');
       load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error updating application');
