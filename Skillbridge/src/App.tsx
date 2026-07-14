@@ -12,6 +12,7 @@ import Talent from "@/pages/Talent";
 import Profile from "@/pages/Profile";
 import Projects from "@/pages/Projects";
 import ProjectDetail from "@/pages/ProjectDetail";
+import ProjectCollaboration from "@/pages/ProjectCollaboration";
 import MyApplications from "@/pages/MyApplications";
 import Tutor from "@/pages/Tutor";
 import TutorChat from "@/pages/TutorChat";
@@ -103,6 +104,7 @@ function App() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/projects" element={<Projects />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
+              <Route path="/projects/:id/collaboration" element={<ProjectCollaboration />} />
               <Route path="/my-applications" element={<MyApplications />} />
               <Route path="/tutor" element={<Tutor />} />
               <Route path="/tutor/:id" element={<TutorChat />} />

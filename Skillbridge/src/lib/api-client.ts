@@ -229,6 +229,17 @@ export const projectsApi = {
   create: (data: { title: string; description: string; project_type?: string; roles?: Array<{ role_title: string; description?: string }> }) => post('/projects', data),
   apply: (projectId: string, data: { role_id: string; message?: string }) => post(`/projects/${projectId}/apply`, data),
   decide: (projectId: string, data: { application_id: string; status: 'accepted' | 'rejected' }) => post(`/projects/${projectId}/decide`, data),
+
+  // ── Collaboration API helpers ──
+  collaboration: (id: string) => get(`/projects/${id}/collaboration`),
+  invite: (projectId: string, data: { recipient_id: string; message?: string }) => post(`/projects/${projectId}/invite`, data),
+  invites: (projectId: string) => get(`/projects/${projectId}/invites`),
+  respondToInvite: (projectId: string, inviteId: string, status: 'accepted' | 'declined') => post(`/projects/${projectId}/invites/${inviteId}/respond`, { status }),
+  requestJoin: (projectId: string, data?: { message?: string }) => post(`/projects/${projectId}/request-join`, data || {}),
+  requests: (projectId: string) => get(`/projects/${projectId}/requests`),
+  decideRequest: (projectId: string, requestId: string, status: 'accepted' | 'declined') => post(`/projects/${projectId}/requests/${requestId}/decide`, { status }),
+  messages: (projectId: string) => get(`/projects/${projectId}/messages`),
+  sendMessage: (projectId: string, content: string) => post(`/projects/${projectId}/messages`, { content }),
 };
 
 // ── B2B API helpers ──
