@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { projectsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AIAssistButton } from '@/components/ai/AIAssistButton';
 import { toast } from 'sonner';
-import { Loader2, Users, CheckCircle2, XCircle, Clock, ArrowLeft, UserPlus } from 'lucide-react';
+import { Loader2, Users, CheckCircle2, XCircle, Clock, ArrowLeft, UserPlus, MessageSquare, SendHorizontal } from 'lucide-react';
 
 interface ProjectProfile { id: string; full_name: string | null; avatar_url: string | null; }
 interface ProjectRow {
@@ -57,6 +58,14 @@ export default function ProjectDetail() {
   const [applyRole, setApplyRole] = useState<ProjectRole | null>(null);
   const [applyMessage, setApplyMessage] = useState('');
   const [isApplying, setIsApplying] = useState(false);
+
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [inviteUserId, setInviteUserId] = useState('');
+  const [inviteMessage, setInviteMessage] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
+
+  const [joinRequests, setJoinRequests] = useState<any[]>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
 
   const isOwner = !!user && project?.owner_id === user.id;
 
@@ -109,6 +118,50 @@ export default function ProjectDetail() {
     }
   };
 
+  const loadJoinRequests = async () => {
+    if (!id || !isOwner) return;
+    setIsLoadingRequests(true);
+    try {
+      const res = await projectsApi.requests(id);
+      setJoinRequests(res.data || []);
+    } catch (_error) {
+    } finally {
+      setIsLoadingRequests(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOwner && id) loadJoinRequests();
+  }, [isOwner, id]);
+
+  const handleInvite = async () => {
+    if (!id || !inviteUserId.trim()) return;
+    setIsInviting(true);
+    try {
+      await projectsApi.invite(id, { recipient_id: inviteUserId.trim(), message: inviteMessage || undefined });
+      toast.success('Invitation sent!');
+      setIsInviteOpen(false);
+      setInviteUserId('');
+      setInviteMessage('');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error sending invitation');
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  const handleDecideRequest = async (requestId: string, status: 'accepted' | 'declined') => {
+    if (!id) return;
+    try {
+      await projectsApi.decideRequest(id, requestId, status);
+      toast.success(status === 'accepted' ? 'Request accepted' : 'Request declined');
+      loadJoinRequests();
+      load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error updating request');
+    }
+  };
+
   if (!project && isLoading) {
     return (
       <div className="min-h-screen pt-24 flex justify-center">
@@ -130,9 +183,17 @@ export default function ProjectDetail() {
   return (
     <div className="min-h-screen pt-24 pb-12 px-4">
       <div className="container mx-auto max-w-4xl space-y-8">
-        <Link to="/projects" className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1.5 w-fit">
-          <ArrowLeft className="w-4 h-4" /> Back to projects
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link to="/projects" className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1.5 w-fit">
+            <ArrowLeft className="w-4 h-4" /> Back to projects
+          </Link>
+          {(isOwner || members.some((m) => m.member_id === user?.id)) && (
+            <Link to={`/projects/${id}/collaboration`}
+              className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1.5">
+              <MessageSquare className="w-4 h-4" /> Collaboration
+            </Link>
+          )}
+        </div>
 
         <Card>
           <CardHeader>
@@ -259,6 +320,18 @@ export default function ProjectDetail() {
           </div>
         )}
 
+        {/* Owner: Invite Talent */}
+        {isOwner && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-primary">Team Management</h2>
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setIsInviteOpen(true)}>
+                <UserPlus className="w-4 h-4" /> Invite Talent
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Owner: manage applications */}
         {isOwner && (
           <div>
@@ -313,6 +386,79 @@ export default function ProjectDetail() {
             )}
           </div>
         )}
+
+        {/* Owner: Join Requests */}
+        {isOwner && (
+          <div>
+            <h2 className="text-xl font-bold text-primary mb-4">Join Requests</h2>
+            {isLoadingRequests ? (
+              <Loader2 className="w-5 h-5 animate-spin text-secondary" />
+            ) : joinRequests.length === 0 ? (
+              <p className="text-muted-foreground">No pending join requests.</p>
+            ) : (
+              <div className="space-y-3">
+                {joinRequests.filter((r: any) => r.status === 'pending').map((req: any) => (
+                  <Card key={req.id}>
+                    <CardContent className="pt-6 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div className="flex gap-3">
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={req.requester?.avatar_url || undefined} />
+                          <AvatarFallback>{(req.requester?.full_name || '?').charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-semibold text-primary">{req.requester?.full_name || 'Unknown'}</p>
+                          {req.message && <p className="text-sm text-muted-foreground max-w-md">{req.message}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => handleDecideRequest(req.id, 'accepted')}>
+                          <CheckCircle2 className="w-4 h-4 text-green-600" /> Accept
+                        </Button>
+                        <Button size="sm" variant="ghost" className="gap-1.5" onClick={() => handleDecideRequest(req.id, 'declined')}>
+                          <XCircle className="w-4 h-4 text-destructive" /> Decline
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Invite Talent dialog */}
+        <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Invite Talent to Join</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="grid gap-2">
+                <Label>User ID (Profile UUID)</Label>
+                <Input
+                  placeholder="Paste the user's profile ID..."
+                  value={inviteUserId}
+                  onChange={(e) => setInviteUserId(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Message (optional)</Label>
+                <Textarea
+                  placeholder="Why you'd like them to join..."
+                  value={inviteMessage}
+                  onChange={(e) => setInviteMessage(e.target.value)}
+                  className="min-h-[80px]"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={handleInvite} disabled={isInviting || !inviteUserId.trim()} className="gap-2">
+                {isInviting ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizontal className="w-4 h-4" />}
+                Send Invitation
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Apply dialog */}
         <Dialog open={!!applyRole} onOpenChange={(open) => !open && setApplyRole(null)}>
