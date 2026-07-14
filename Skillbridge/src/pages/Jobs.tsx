@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { jobsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,15 +11,26 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Briefcase, MapPin, DollarSign, Calendar, Plus, Search, Loader2, Building2 } from 'lucide-react';
-import { Database } from '@/integrations/supabase/types';
 
-type Job = Database['public']['Tables']['jobs']['Row'] & {
-  profiles?: {
-    full_name: string | null;
-    company_name: string | null;
-    avatar_url: string | null;
-  };
-};
+interface JobProfile {
+  full_name: string | null;
+  company_name: string | null;
+  avatar_url: string | null;
+}
+
+interface Job {
+  id: string;
+  title: string;
+  description: string;
+  type: string;
+  location: string | null;
+  salary_range: string | null;
+  requirements: string | null;
+  is_active: boolean;
+  company_id: string;
+  created_at: string;
+  profiles: JobProfile | null;
+}
 
 export default function Jobs() {
   const { user, profile } = useAuth();
@@ -46,27 +57,9 @@ export default function Jobs() {
 
   const fetchJobs = async () => {
     try {
-      let query = supabase
-        .from('jobs')
-        .select(`
-          *,
-          profiles:company_id (
-            full_name,
-            company_name,
-            avatar_url
-          )
-        `)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
-
-      if (filterType !== 'all') {
-        query = query.eq('type', filterType);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setJobs(data || []);
+      const params = filterType !== 'all' ? { type: filterType } : undefined;
+      const res = await jobsApi.list(params);
+      setJobs(res.data || []);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error fetching jobs');
     } finally {
@@ -80,13 +73,10 @@ export default function Jobs() {
     setIsPosting(true);
 
     try {
-      const { error } = await supabase.from('jobs').insert({
+      await jobsApi.create({
         ...newJob,
-        company_id: user.id,
         type: newJob.type as 'part-time' | 'internship',
       });
-
-      if (error) throw error;
       toast.success('Job posted successfully!');
       fetchJobs();
       setNewJob({
@@ -115,21 +105,7 @@ export default function Jobs() {
     }
 
     try {
-      const { error } = await supabase.from('applications').insert({
-        job_id: jobId,
-        student_id: user.id,
-        status: 'pending',
-      });
-
-      if (error) {
-        if (error.code === '23505') {
-          toast.error('You have already applied for this job');
-        } else {
-          throw error;
-        }
-        return;
-      }
-
+      await jobsApi.apply(jobId);
       toast.success('Application submitted successfully!');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error submitting application');

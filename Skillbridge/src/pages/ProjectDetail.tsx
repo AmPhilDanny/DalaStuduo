@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { projectsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -12,18 +12,35 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { AIAssistButton } from '@/components/ai/AIAssistButton';
 import { toast } from 'sonner';
 import { Loader2, Users, CheckCircle2, XCircle, Clock, ArrowLeft, UserPlus } from 'lucide-react';
-import { Database } from '@/integrations/supabase/types';
 
-type ProjectRow = Database['public']['Tables']['projects']['Row'] & {
-  profiles?: { id: string; full_name: string | null; avatar_url: string | null } | null;
-};
-type ProjectRole = Database['public']['Tables']['project_roles']['Row'];
-type ProjectApplication = Database['public']['Tables']['project_applications']['Row'] & {
+interface ProjectProfile { id: string; full_name: string | null; avatar_url: string | null; }
+interface ProjectRow {
+  id: string; title: string; description: string; is_paid: boolean;
+  collaboration_type: string | null; project_status: string | null;
+  github_url: string | null; deployment_url: string | null;
+  owner_id: string; created_at: string;
+  profiles?: ProjectProfile | null;
+  roles?: ProjectRole[];
+  members?: ProjectMember[];
+  applications?: ProjectApplication[];
+  myApplications?: ProjectApplication[];
+}
+interface ProjectRole {
+  id: string; project_id: string; role_title: string;
+  description: string | null; skills_needed: string[];
+  is_filled: boolean; created_at: string;
+}
+interface ProjectApplication {
+  id: string; project_id: string; role_id: string;
+  applicant_id: string; message: string | null; status: string;
+  created_at: string;
   profiles?: { full_name: string | null; avatar_url: string | null; headline: string | null; skills: string[] } | null;
-};
-type ProjectMember = Database['public']['Tables']['project_members']['Row'] & {
+}
+interface ProjectMember {
+  id: string; project_id: string; member_id: string;
+  role: string | null; role_title: string | null; created_at: string;
   profiles?: { full_name: string | null; avatar_url: string | null } | null;
-};
+}
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -45,42 +62,19 @@ export default function ProjectDetail() {
   const load = useCallback(async () => {
     if (!id) return;
     try {
-      const { data: proj, error: projErr } = await supabase
-        .from('projects')
-        .select('*, profiles:owner_id(id, full_name, avatar_url)')
-        .eq('id', id)
-        .single();
-      if (projErr) throw projErr;
+      const res = await projectsApi.get(id);
+      const proj = res.data;
       setProject(proj);
-
-      const { data: roleData } = await supabase.from('project_roles').select('*').eq('project_id', id).order('created_at');
-      setRoles(roleData || []);
-
-      const { data: memberData } = await supabase
-        .from('project_members')
-        .select('*, profiles:member_id(full_name, avatar_url)')
-        .eq('project_id', id);
-      setMembers(memberData || []);
-
-      if (user && proj?.owner_id === user.id) {
-        const { data: appData } = await supabase
-          .from('project_applications')
-          .select('*, profiles:applicant_id(full_name, avatar_url, headline, skills)')
-          .eq('project_id', id)
-          .order('created_at', { ascending: false });
-        setApplications(appData || []);
-      }
-
-      if (user) {
-        const { data: mine } = await supabase.from('project_applications').select('*').eq('project_id', id).eq('applicant_id', user.id);
-        setMyApplications(mine || []);
-      }
+      setRoles(proj.roles || []);
+      setMembers(proj.members || []);
+      setApplications(proj.applications || []);
+      setMyApplications(proj.myApplications || []);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error loading project');
     } finally {
       setIsLoading(false);
     }
-  }, [id, user]);
+  }, [id]);
 
   useEffect(() => {
     load();
@@ -90,44 +84,24 @@ export default function ProjectDetail() {
     if (!user || !applyRole || !project) return;
     setIsApplying(true);
     try {
-      const { error } = await supabase.from('project_applications').insert({
-        role_id: applyRole.id,
-        project_id: project.id,
-        applicant_id: user.id,
-        message: applyMessage || null,
-      });
-      if (error) {
-        if (error.code === '23505') toast.error("You've already applied to this role");
-        else throw error;
-        return;
-      }
+      await projectsApi.apply(project.id, { role_id: applyRole.id, message: applyMessage || undefined });
       toast.success('Application sent!');
       setApplyRole(null);
       setApplyMessage('');
       load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Error applying');
+      const msg = error instanceof Error ? error.message : 'Error applying';
+      if (msg.toLowerCase().includes('already')) toast.error("You've already applied to this role");
+      else toast.error(msg);
     } finally {
       setIsApplying(false);
     }
   };
 
-  const handleDecision = async (application: ProjectApplication, decision: 'accepted' | 'rejected') => {
+  const handleDecision = async (application: ProjectApplication, decision: 'approved' | 'rejected') => {
     try {
-      const { error } = await supabase.from('project_applications').update({ status: decision }).eq('id', application.id);
-      if (error) throw error;
-
-      if (decision === 'accepted') {
-        const role = roles.find((r) => r.id === application.role_id);
-        await supabase.from('project_members').insert({
-          project_id: application.project_id,
-          member_id: application.applicant_id,
-          role_title: role?.role_title || null,
-        });
-        await supabase.from('project_roles').update({ is_filled: true }).eq('id', application.role_id);
-      }
-
-      toast.success(decision === 'accepted' ? 'Collaborator added to the project' : 'Application declined');
+      await projectsApi.decide(project!.id, { application_id: application.id, status: decision });
+      toast.success(decision === 'approved' ? 'Collaborator added to the project' : 'Application declined');
       load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error updating application');

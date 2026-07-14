@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { projectsApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,12 +13,21 @@ import { AIAssistButton } from '@/components/ai/AIAssistButton';
 import { SkillInput } from '@/components/talent/SkillInput';
 import { toast } from 'sonner';
 import { Plus, Loader2, FolderGit2, Users, Search, UserPlus } from 'lucide-react';
-import { Database } from '@/integrations/supabase/types';
 
-type ProjectRow = Database['public']['Tables']['projects']['Row'] & {
+interface ProjectRow {
+  id: string;
+  title: string;
+  description: string;
+  is_paid: boolean;
+  collaboration_type: string | null;
+  project_status: string | null;
+  github_url: string | null;
+  deployment_url: string | null;
+  owner_id: string;
+  created_at: string;
   profiles?: { full_name: string | null; avatar_url: string | null } | null;
   project_roles?: { id: string; role_title: string; is_filled: boolean }[];
-};
+}
 
 interface DraftRole {
   role_title: string;
@@ -42,12 +51,8 @@ export default function Projects() {
 
   const fetchProjects = async () => {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*, profiles:owner_id(full_name, avatar_url), project_roles(id, role_title, is_filled)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setProjects(data || []);
+      const res = await projectsApi.list();
+      setProjects(res.data || []);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error loading projects');
     } finally {
@@ -69,30 +74,14 @@ export default function Projects() {
     }
     setIsPosting(true);
     try {
-      const { data: project, error } = await supabase
-        .from('projects')
-        .insert({
-          owner_id: user.id,
-          title: newProject.title,
-          description: newProject.description,
-          is_paid: newProject.is_paid,
-          collaboration_type: newProject.collaboration_type,
-          project_status: newProject.project_status,
-          github_url: newProject.github_url || null,
-          deployment_url: newProject.deployment_url || null,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-
-      const rolesToInsert = draftRoles
-        .filter((r) => r.role_title.trim())
-        .map((r) => ({ project_id: project.id, role_title: r.role_title, skills_needed: r.skills_needed }));
-
-      if (rolesToInsert.length > 0) {
-        const { error: rolesError } = await supabase.from('project_roles').insert(rolesToInsert);
-        if (rolesError) throw rolesError;
-      }
+      await projectsApi.create({
+        title: newProject.title,
+        description: newProject.description,
+        project_type: newProject.collaboration_type || undefined,
+        roles: draftRoles
+          .filter((r) => r.role_title.trim())
+          .map((r) => ({ role_title: r.role_title, description: undefined })),
+      });
 
       toast.success('Project posted! Collaborators can now apply.');
       setIsCreateOpen(false);

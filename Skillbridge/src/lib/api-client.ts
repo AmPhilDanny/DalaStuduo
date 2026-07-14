@@ -211,6 +211,26 @@ export const aiApi = {
   assist: (data: { mode: string; [key: string]: any }) => post('/ai', data),
 };
 
+// ── Jobs API helpers ──
+
+export const jobsApi = {
+  list: (params?: { type?: string }) => get('/jobs', params as any),
+  myApplications: () => get('/jobs/my-applications'),
+  create: (data: { title: string; description: string; type: string; location?: string; salary_range?: string; requirements?: string }) => post('/jobs', data),
+  apply: (jobId: string) => post(`/jobs/${jobId}/apply`),
+};
+
+// ── Projects API helpers ──
+
+export const projectsApi = {
+  list: () => get('/projects'),
+  get: (id: string) => get(`/projects/${id}`),
+  getRoles: (id: string) => get(`/projects/${id}/roles`),
+  create: (data: { title: string; description: string; project_type?: string; roles?: Array<{ role_title: string; description?: string }> }) => post('/projects', data),
+  apply: (projectId: string, data: { role_id: string; message?: string }) => post(`/projects/${projectId}/apply`, data),
+  decide: (projectId: string, data: { application_id: string; status: 'approved' | 'rejected' }) => post(`/projects/${projectId}/decide`, data),
+};
+
 // ── B2B API helpers ──
 
 export const b2bApi = {

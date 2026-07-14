@@ -6,6 +6,8 @@ import pino from 'pino';
 import { errorHandler } from './middleware/error.js';
 import { requireAuth, optionalAuth } from './middleware/auth.js';
 import { adminClient } from './lib/supabase-admin.js';
+import { jobsRouter } from './routes/jobs/index.js';
+import { projectsRouter } from './routes/projects/index.js';
 import { adminRouter } from './routes/admin/index.js';
 import { marketplaceRouter } from './routes/marketplace/index.js';
 import { paymentsRouter } from './routes/payments/index.js';
@@ -70,6 +72,12 @@ app.use('/api/webhooks', webhooksRouter);
 
 // ── Marketplace Routes (public read, authenticated write) ──
 app.use('/api/marketplace', optionalAuth, marketplaceRouter);
+
+// ── Jobs Routes (public read, authenticated write) ──
+app.use('/api/jobs', optionalAuth, jobsRouter);
+
+// ── Projects Routes (public read, authenticated write) ──
+app.use('/api/projects', optionalAuth, projectsRouter);
 app.use('/api/payments', requireAuth, paymentsRouter);
 app.use('/api/wallet', requireAuth, walletRouter);
 app.use('/api/messaging', requireAuth, messagingRouter);
