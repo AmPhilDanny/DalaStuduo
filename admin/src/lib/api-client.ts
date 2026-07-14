@@ -76,6 +76,17 @@ export async function del<T = any>(path: string): Promise<{ data: T; [key: strin
   return handleResponse(res);
 }
 
+export interface AdminRole {
+  id: string;
+  name: string;
+  scope: 'platform' | 'org';
+  description: string | null;
+  permissions: Record<string, boolean>;
+  is_system_role: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Admin API helpers ──
 
 export const adminApi = {
@@ -101,6 +112,12 @@ export const adminApi = {
   auditLog: (params?: { limit?: number }) => get('/admin/audit-log', params),
   config: () => get('/admin/config'),
   updateConfig: (key: string, value: any) => patch('/admin/config', { key, value }),
+
+  // Role Management
+  roles: () => get<AdminRole[]>('/admin/roles'),
+  createRole: (data: { name: string; scope: 'platform' | 'org'; description?: string; permissions?: Record<string, boolean> }) => post<AdminRole>('/admin/roles', data),
+  updateRole: (id: string, data: { name?: string; description?: string; permissions?: Record<string, boolean> }) => patch<AdminRole>(`/admin/roles/${id}`, data),
+  deleteRole: (id: string) => del<AdminRole>(`/admin/roles/${id}`),
 };
 
 // ── Marketplace API helpers ──
