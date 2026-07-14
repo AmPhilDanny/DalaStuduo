@@ -74,18 +74,10 @@ app.get('/api/site-config', async (_req, res) => {
 
 // ── Public Routes (no auth required) ──
 app.use('/api/webhooks', webhooksRouter);
-
 // Public marketplace routes (no auth)
-app.get('/api/marketplace/services', (req, res) => marketplaceRouter(req, res));
-app.get('/api/marketplace/listings', (req, res) => marketplaceRouter(req, res));
-app.get('/api/marketplace/listings/:id', (req, res) => marketplaceRouter(req, res));
-app.get('/api/marketplace/reviews/listing/:id', (req, res) => marketplaceRouter(req, res));
-app.get('/api/marketplace/reviews/listing/:id/stats', (req, res) => marketplaceRouter(req, res));
-app.get('/api/marketplace/reviews/provider/:id', (req, res) => marketplaceRouter(req, res));
-app.get('/api/marketplace/reviews/provider/:id/stats', (req, res) => marketplaceRouter(req, res));
+app.use('/api/marketplace', marketplaceRouter);
 
-// ── Authenticated Routes ──
-app.use('/api/marketplace', requireAuth, marketplaceRouter);
+// ── Authenticated Routes (these use requireAuth, which will overwrite req.supabaseClient and set req.user) ──
 app.use('/api/payments', requireAuth, paymentsRouter);
 app.use('/api/wallet', requireAuth, walletRouter);
 app.use('/api/messaging', requireAuth, messagingRouter);
