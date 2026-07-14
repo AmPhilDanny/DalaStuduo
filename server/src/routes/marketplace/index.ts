@@ -67,8 +67,18 @@ marketplaceRouter.get('/listings', async (req: Request, res: Response) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
   const offset = (page - 1) * limit;
 
-  if (mine) query = query.eq('provider_id', req.user!.id);
-  if (status) query = query.eq('status', status);
+  if (mine) {
+    if (!req.user) {
+      throw new AppError(401, 'Authentication required to view your listings');
+    }
+    query = query.eq('provider_id', req.user.id);
+  }
+  // If no status specified, default to active for public
+  if (status) {
+    query = query.eq('status', status);
+  } else if (!mine) {
+    query = query.eq('status', 'active');
+  }
   if (category) query = query.eq('service.category', category);
   if (search) query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
   if (minPrice) query = query.gte('price', parseFloat(minPrice));

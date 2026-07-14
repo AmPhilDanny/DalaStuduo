@@ -3,6 +3,7 @@ import { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 import { User, Session } from '@supabase/supabase-js';
+import { setTokenProvider } from '@/lib/api-client';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
@@ -23,6 +24,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [fetchedOnce, setFetchedOnce] = useState(false);
 
   useEffect(() => {
+    // Set token provider for API client
+    setTokenProvider(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      return session?.access_token || null;
+    });
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
