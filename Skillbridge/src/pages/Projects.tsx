@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AIAssistButton } from '@/components/ai/AIAssistButton';
 import { SkillInput } from '@/components/talent/SkillInput';
 import { toast } from 'sonner';
-import { Plus, Loader2, FolderGit2, Users, Search, UserPlus } from 'lucide-react';
+import { Plus, Loader2, FolderGit2, Users, Search, UserPlus, Clock } from 'lucide-react';
 
 interface ProjectRow {
   id: string;
@@ -45,6 +45,9 @@ export default function Projects() {
 
   const [newProject, setNewProject] = useState({ title: '', description: '', is_paid: false, collaboration_type: 'free', project_status: 'beginning', github_url: '', deployment_url: '' });
   const [draftRoles, setDraftRoles] = useState<DraftRole[]>([{ role_title: '', skills_needed: [] }]);
+
+  const [requestedProjects, setRequestedProjects] = useState<Set<string>>(new Set());
+  const [requestingId, setRequestingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProjects();
@@ -93,6 +96,24 @@ export default function Projects() {
       toast.error(error instanceof Error ? error.message : 'Error posting project');
     } finally {
       setIsPosting(false);
+    }
+  };
+
+  const handleRequestJoin = async (e: React.MouseEvent, projectId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user || requestingId) return;
+    setRequestingId(projectId);
+    try {
+      await projectsApi.requestJoin(projectId);
+      toast.success('Join request sent!');
+      setRequestedProjects((prev) => new Set(prev).add(projectId));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Error requesting to join';
+      if (msg.toLowerCase().includes('already')) toast.error('You already have a pending request');
+      else toast.error(msg);
+    } finally {
+      setRequestingId(null);
     }
   };
 
@@ -352,9 +373,32 @@ export default function Projects() {
                       )}
                     </CardContent>
                     <CardFooter>
-                      <div className="flex items-center gap-1.5 text-sm text-secondary">
-                        <Users className="w-4 h-4" />
-                        {openRoles.length > 0 ? `${openRoles.length} open role${openRoles.length > 1 ? 's' : ''}` : 'Roles filled'}
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-1.5 text-sm text-secondary">
+                          <Users className="w-4 h-4" />
+                          {openRoles.length > 0 ? `${openRoles.length} open role${openRoles.length > 1 ? 's' : ''}` : 'Roles filled'}
+                        </div>
+                        {user && project.owner_id !== user.id && !requestedProjects.has(project.id) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 h-8 text-xs"
+                            disabled={requestingId === project.id}
+                            onClick={(e) => handleRequestJoin(e, project.id)}
+                          >
+                            {requestingId === project.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <UserPlus className="w-3 h-3" />
+                            )}
+                            {requestingId === project.id ? 'Sending...' : 'Request to Join'}
+                          </Button>
+                        )}
+                        {user && requestedProjects.has(project.id) && (
+                          <Badge variant="secondary" className="text-xs gap-1">
+                            <Clock className="w-3 h-3" /> Requested
+                          </Badge>
+                        )}
                       </div>
                     </CardFooter>
                   </Card>
