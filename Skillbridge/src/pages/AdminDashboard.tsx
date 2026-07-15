@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,6 +43,7 @@ import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, Refresh
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
+import { get } from '@/lib/api-client';
 import { downloadCSV } from '@/lib/export';
 import SiteSettingsTab from '@/components/admin/SiteSettingsTab';
 import UserManagementTab from '@/components/admin/UserManagementTab';
@@ -118,6 +119,9 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [users, setUsers] = useState<AdminProfile[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [orgs, setOrgs] = useState<any[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState(false);
+  const [orgSearch, setOrgSearch] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [orderStatus, setOrderStatus] = useState('');
@@ -244,6 +248,24 @@ export default function AdminDashboard() {
       setIsLoading(false);
     }
   };
+
+  const fetchOrgs = useCallback(async () => {
+    setOrgsLoading(true);
+    try {
+      const result = await get<any[]>('/admin/orgs', { search: orgSearch || undefined, limit: 100 });
+      setOrgs(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load organizations');
+    } finally {
+      setOrgsLoading(false);
+    }
+  }, [orgSearch]);
+
+  useEffect(() => {
+    if (user && isAdminAccess) {
+      fetchOrgs();
+    }
+  }, [user, isAdminAccess, fetchOrgs]);
 
   const saveService = async () => {
     if (!editingService) return;
@@ -1195,19 +1217,82 @@ export default function AdminDashboard() {
           {activeTab === 'organizations' && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-secondary" />
-                  Organization Management
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-secondary" />
+                    Organization Management
+                  </CardTitle>
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by name..."
+                        className="pl-9 w-60"
+                        value={orgSearch}
+                        onChange={(e) => setOrgSearch(e.target.value)}
+                      />
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      const csvData = orgs.map((o: any) => ({
+                        Name: o.name,
+                        Industry: o.industry || '—',
+                        Size: o.size || '—',
+                        Members: o.member_count ?? 0,
+                        Plan: o.plan?.name || 'Free',
+                        Created: new Date(o.created_at).toLocaleDateString(),
+                      }));
+                      downloadCSV(csvData, 'organizations');
+                    }}>
+                      <Download className="w-3.5 h-3.5 mr-1" /> Export CSV
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <Building2 className="w-12 h-12 text-gray-300 mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Coming Soon</h3>
-                  <p className="text-sm text-muted-foreground max-w-md">
-                    Manage organizations — view details, verify businesses, and oversee subscription plans.
-                  </p>
-                </div>
+                {orgsLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                ) : orgs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <Building2 className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">No Organizations Yet</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">
+                      Organizations will appear here once users sign up and create one.
+                    </p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Industry</TableHead>
+                        <TableHead>Size</TableHead>
+                        <TableHead>Members</TableHead>
+                        <TableHead>Plan</TableHead>
+                        <TableHead>Created</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orgs.map((org: any) => (
+                        <TableRow key={org.id}>
+                          <TableCell className="font-medium">{org.name}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{org.industry || '—'}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{org.size || '—'}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{org.member_count ?? 0}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={org.plan ? 'default' : 'outline'}>
+                              {org.plan?.name || 'Free'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {new Date(org.created_at).toLocaleDateString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           )}
