@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Briefcase, FileText, User, GraduationCap, TrendingUp, ArrowRight, Star, Search } from 'lucide-react';
+import { Loader2, Briefcase, FileText, User, GraduationCap, TrendingUp, ArrowRight, Star, Search, Users, Target, Building2, Shield, Settings, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ApplicationWithJob {
@@ -214,6 +214,52 @@ export default function UserDashboard() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* B2B Quick Actions — only for firm/org users */}
+            {profile?.role === 'firm' && (
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4" />
+                    Organization
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/b2b/team')}>
+                    <Users className="w-4 h-4 mr-2" />
+                    Team
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/b2b/talent')}>
+                    <Target className="w-4 h-4 mr-2" />
+                    Talent Pool
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/b2b/hiring')}>
+                    <Briefcase className="w-4 h-4 mr-2" />
+                    Hiring
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/b2b/hiring/pipeline')}>
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    Pipeline
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/b2b/contracts')}>
+                    <FileText className="w-4 h-4 mr-2" />
+                    Contracts
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/b2b/compliance')}>
+                    <Shield className="w-4 h-4 mr-2" />
+                    Compliance
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/b2b/analytics')}>
+                    <TrendingUp className="w-4 h-4 mr-2" />
+                    Analytics
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/b2b/settings')}>
+                    <Settings className="w-4 h-4 mr-2" />
+                    Settings
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
 

@@ -32,6 +32,17 @@ import DisputeDetail from "@/pages/DisputeDetail";
 import Connections from "@/pages/Connections";
 import OrgSetup from "@/b2b/pages/OrgSetup";
 import InviteAccept from "@/b2b/pages/InviteAccept";
+import B2BLayout from "@/b2b/components/layout/B2BLayout";
+import TeamList from "@/b2b/components/team/TeamList";
+import TalentSearch from "@/b2b/components/talent/TalentSearch";
+import TalentListManager from "@/b2b/components/talent/TalentListManager";
+import BulkJobPost from "@/b2b/components/hiring/BulkJobPost";
+import PipelineView from "@/b2b/components/hiring/PipelineView";
+import ContractList from "@/b2b/components/contracts/ContractList";
+import ComplianceDashboard from "@/b2b/components/compliance/ComplianceDashboard";
+import AnalyticsDashboard from "@/b2b/components/analytics/AnalyticsDashboard";
+import SettingsPage from "@/b2b/components/settings/SettingsPage";
+import { OrgProvider } from "@/b2b/hooks/useOrg";
 
 function AdminRedirect() {
   window.location.href = 'http://localhost:4000/';
@@ -111,7 +122,23 @@ function App() {
               <Route path="/admin" element={<AdminRedirect />} />
               <Route path="/b2b/setup" element={<OrgSetup />} />
               <Route path="/b2b/invite/accept" element={<InviteAccept />} />
-              <Route path="/b2b/*" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/b2b/dashboard" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/b2b" element={
+                <OrgProvider>
+                  <B2BLayout />
+                </OrgProvider>
+              }>
+                <Route index element={<Navigate to="/dashboard" replace />} />
+                <Route path="team" element={<TeamList />} />
+                <Route path="talent" element={<TalentSearch />} />
+                <Route path="talent/lists" element={<TalentListManager />} />
+                <Route path="hiring" element={<BulkJobPost />} />
+                <Route path="hiring/pipeline" element={<PipelineView />} />
+                <Route path="contracts" element={<ContractList />} />
+                <Route path="compliance" element={<ComplianceDashboard />} />
+                <Route path="analytics" element={<AnalyticsDashboard />} />
+                <Route path="settings" element={<SettingsPage />} />
+              </Route>
             </Routes>
           </main>
           <Footer />
