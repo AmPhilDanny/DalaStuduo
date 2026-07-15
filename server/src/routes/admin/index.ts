@@ -849,3 +849,46 @@ adminRouter.delete('/billing/plans/:id', async (req: Request, res: Response) => 
   }
   res.json({ data });
 });
+
+// ════════════════════════════════════════
+// CONTRACTS (CROSS-ORG)
+// ════════════════════════════════════════
+
+adminRouter.get('/contracts', async (req: Request, res: Response) => {
+  const status = req.query.status as string | undefined;
+  const search = req.query.search as string | undefined;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  let query = adminClient
+    .from('contracts')
+    .select('*, talent:talent_id(id, full_name, avatar_url, headline)', { count: 'exact' });
+
+  if (status) query = query.eq('status', status);
+
+  const { data: contracts, error, count } = await query
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) throw new AppError(500, error.message);
+
+  const orgIds = [...new Set((contracts || []).map((c: any) => c.org_id))];
+  let orgMap = new Map<string, { name: string; slug: string }>();
+
+  if (orgIds.length > 0) {
+    const { data: orgs } = await adminClient
+      .from('organizations')
+      .select('id, name, slug')
+      .in('id', orgIds);
+    if (orgs) {
+      orgMap = new Map(orgs.map((o: any) => [o.id, { name: o.name, slug: o.slug }]));
+    }
+  }
+
+  const data = (contracts || []).map((c: any) => ({
+    ...c,
+    organization: orgMap.get(c.org_id) || null,
+  }));
+
+  res.json({ data, count, limit, offset });
+});

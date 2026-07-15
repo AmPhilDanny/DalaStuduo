@@ -153,6 +153,12 @@ export default function AdminDashboard() {
   });
   const [savingPlan, setSavingPlan] = useState(false);
 
+  // Contracts
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [contractsLoading, setContractsLoading] = useState(false);
+  const [contractSearch, setContractSearch] = useState('');
+  const [contractStatusFilter, setContractStatusFilter] = useState('');
+
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [orderStatus, setOrderStatus] = useState('');
@@ -423,6 +429,34 @@ export default function AdminDashboard() {
       toast.error(err instanceof Error ? err.message : 'Failed to update plan');
     }
   };
+
+  const fetchContracts = useCallback(async () => {
+    setContractsLoading(true);
+    try {
+      const params: Record<string, string | number | undefined> = { limit: 100 };
+      if (contractStatusFilter) params.status = contractStatusFilter;
+      if (contractSearch) params.search = contractSearch;
+      const result = await get<any[]>('/admin/contracts', params);
+      setContracts(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load contracts');
+    } finally {
+      setContractsLoading(false);
+    }
+  }, [contractStatusFilter, contractSearch]);
+
+  useEffect(() => {
+    if (user && isAdminAccess) {
+      fetchContracts();
+    }
+  }, [user, isAdminAccess, fetchContracts]);
+
+  // Debounced search
+  const [contractSearchInput, setContractSearchInput] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setContractSearch(contractSearchInput), 400);
+    return () => clearTimeout(timer);
+  }, [contractSearchInput]);
 
   const saveService = async () => {
     if (!editingService) return;
@@ -812,6 +846,7 @@ export default function AdminDashboard() {
     { value: 'organizations', label: 'Organizations', icon: <Building2 className="w-4 h-4" /> },
     { value: 'verifications', label: 'Verifications', icon: <Shield className="w-4 h-4" /> },
     { value: 'plans', label: 'Subscription Plans', icon: <CreditCard className="w-4 h-4" /> },
+    { value: 'contracts', label: 'Contracts', icon: <FileText className="w-4 h-4" /> },
   ];
 
   return (
@@ -1627,6 +1662,93 @@ export default function AdminDashboard() {
                                 <XCircle className="w-3.5 h-3.5" />
                               </Button>
                             </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ═══ CONTRACTS ═══ */}
+          {activeTab === 'contracts' && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-secondary" />
+                    Contracts
+                  </CardTitle>
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+                      <Input placeholder="Search by title..." className="pl-9 w-56"
+                        value={contractSearchInput}
+                        onChange={e => setContractSearchInput(e.target.value)} />
+                    </div>
+                    <select className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      value={contractStatusFilter} onChange={e => setContractStatusFilter(e.target.value)}>
+                      <option value="">All statuses</option>
+                      <option value="draft">Draft</option>
+                      <option value="sent">Sent</option>
+                      <option value="signed">Signed</option>
+                      <option value="active">Active</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {contractsLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                ) : contracts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <FileText className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">No Contracts Found</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">No contracts match your current filters.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Organization</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Talent</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Value</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Created</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {contracts.map((c: any) => (
+                        <TableRow key={c.id}>
+                          <TableCell className="font-medium text-sm">{c.organization?.name || c.org_id?.slice(0, 8)}</TableCell>
+                          <TableCell className="text-sm max-w-[200px] truncate">{c.title}</TableCell>
+                          <TableCell className="text-sm">{c.talent?.full_name || '—'}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{c.contract_type?.replace(/_/g, ' ')}</TableCell>
+                          <TableCell className="text-sm font-medium">
+                            {c.currency || 'NGN'} {Number(c.total_value || 0).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              c.status === 'active' || c.status === 'completed' ? 'default' :
+                              c.status === 'draft' || c.status === 'sent' ? 'secondary' :
+                              c.status === 'cancelled' ? 'outline' : 'secondary'
+                            }
+                              className={`text-xs ${
+                                c.status === 'completed' ? 'bg-green-100 text-green-800 border-green-200' :
+                                c.status === 'active' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                                c.status === 'cancelled' ? 'text-red-600 border-red-200' : ''
+                              }`}>
+                              {c.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {new Date(c.created_at).toLocaleDateString()}
                           </TableCell>
                         </TableRow>
                       ))}
