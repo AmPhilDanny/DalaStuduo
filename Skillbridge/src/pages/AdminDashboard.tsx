@@ -50,7 +50,7 @@ import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, Refresh
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
-import { get, patch } from '@/lib/api-client';
+import { get, post, patch, del } from '@/lib/api-client';
 import { downloadCSV } from '@/lib/export';
 import SiteSettingsTab from '@/components/admin/SiteSettingsTab';
 import UserManagementTab from '@/components/admin/UserManagementTab';
@@ -140,6 +140,18 @@ export default function AdminDashboard() {
   const [reviewNotes, setReviewNotes] = useState('');
   const [reviewingStatus, setReviewingStatus] = useState<'verified' | 'rejected' | null>(null);
   const [reviewProcessing, setReviewProcessing] = useState(false);
+
+  // Plans
+  const [plans, setPlans] = useState<any[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [planDialogOpen, setPlanDialogOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<any | null>(null);
+  const [planForm, setPlanForm] = useState({
+    name: '', slug: '', description: '',
+    price_monthly: 0, price_yearly: 0,
+    features: '', is_active: true, sort_order: 0,
+  });
+  const [savingPlan, setSavingPlan] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -325,6 +337,90 @@ export default function AdminDashboard() {
       toast.error(err instanceof Error ? err.message : 'Failed to review verification');
     } finally {
       setReviewProcessing(false);
+    }
+  };
+
+  const fetchPlans = useCallback(async () => {
+    setPlansLoading(true);
+    try {
+      const result = await get<any[]>('/admin/billing/plans');
+      setPlans(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load plans');
+    } finally {
+      setPlansLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user && isAdminAccess) {
+      fetchPlans();
+    }
+  }, [user, isAdminAccess, fetchPlans]);
+
+  const resetPlanForm = (plan?: any) => {
+    setPlanForm({
+      name: plan?.name || '',
+      slug: plan?.slug || '',
+      description: plan?.description || '',
+      price_monthly: plan?.price_monthly ?? 0,
+      price_yearly: plan?.price_yearly ?? 0,
+      features: (plan?.features || []).join(', '),
+      is_active: plan?.is_active ?? true,
+      sort_order: plan?.sort_order ?? 0,
+    });
+  };
+
+  const handleSavePlan = async () => {
+    if (!planForm.name.trim() || !planForm.slug.trim()) return;
+    setSavingPlan(true);
+    try {
+      const body = {
+        name: planForm.name.trim(),
+        slug: planForm.slug.trim(),
+        description: planForm.description.trim() || undefined,
+        price_monthly: planForm.price_monthly,
+        price_yearly: planForm.price_yearly,
+        features: planForm.features.split(',').map(s => s.trim()).filter(Boolean),
+        is_active: planForm.is_active,
+        sort_order: planForm.sort_order,
+      };
+
+      if (editingPlan) {
+        await patch(`/admin/billing/plans/${editingPlan.id}`, body);
+        toast.success('Plan updated');
+      } else {
+        await post('/admin/billing/plans', body);
+        toast.success('Plan created');
+      }
+      setPlanDialogOpen(false);
+      setEditingPlan(null);
+      fetchPlans();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save plan');
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
+  const handleDeletePlan = async (plan: any) => {
+    if (!confirm(`Delete plan "${plan.name}"? ${plan.is_active ? ' It will be deactivated if orgs use it.' : ''}`)) return;
+    try {
+      await del(`/admin/billing/plans/${plan.id}`);
+      toast.success('Plan deleted');
+      fetchPlans();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete plan');
+    }
+  };
+
+  const handleTogglePlanActive = async (plan: any) => {
+    try {
+      await patch(`/admin/billing/plans/${plan.id}`, { is_active: !plan.is_active });
+      toast.success(`Plan ${plan.is_active ? 'deactivated' : 'activated'}`);
+      fetchPlans();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update plan');
     }
   };
 
@@ -715,6 +811,7 @@ export default function AdminDashboard() {
   const B2B_NAV_ITEMS: { value: string; label: string; icon: React.ReactNode }[] = [
     { value: 'organizations', label: 'Organizations', icon: <Building2 className="w-4 h-4" /> },
     { value: 'verifications', label: 'Verifications', icon: <Shield className="w-4 h-4" /> },
+    { value: 'plans', label: 'Subscription Plans', icon: <CreditCard className="w-4 h-4" /> },
   ];
 
   return (
@@ -1458,6 +1555,88 @@ export default function AdminDashboard() {
             </Card>
           )}
 
+          {/* ═══ PLANS ═══ */}
+          {activeTab === 'plans' && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="w-5 h-5 text-secondary" />
+                    Subscription Plans
+                  </CardTitle>
+                  <Button size="sm" onClick={() => { setEditingPlan(null); resetPlanForm(); setPlanDialogOpen(true); }}>
+                    <CreditCard className="w-3.5 h-3.5 mr-1" /> Create Plan
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {plansLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                ) : plans.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <CreditCard className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">No Plans Yet</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">Create your first subscription plan.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Slug</TableHead>
+                        <TableHead>Monthly</TableHead>
+                        <TableHead>Yearly</TableHead>
+                        <TableHead>Features</TableHead>
+                        <TableHead>Active</TableHead>
+                        <TableHead>Sort</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {plans.map((plan: any) => (
+                        <TableRow key={plan.id} className={plan.is_active ? '' : 'opacity-50'}>
+                          <TableCell className="font-medium">{plan.name}</TableCell>
+                          <TableCell className="text-sm font-mono text-muted-foreground">{plan.slug}</TableCell>
+                          <TableCell>${Number(plan.price_monthly).toFixed(2)}</TableCell>
+                          <TableCell>${Number(plan.price_yearly).toFixed(2)}</TableCell>
+                          <TableCell className="max-w-[200px]">
+                            <div className="flex flex-wrap gap-1">
+                              {(plan.features || []).slice(0, 3).map((f: string, i: number) => (
+                                <Badge key={i} variant="secondary" className="text-xs">{f}</Badge>
+                              ))}
+                              {(plan.features || []).length > 3 && (
+                                <Badge variant="outline" className="text-xs">+{plan.features.length - 3}</Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Button size="sm" variant={plan.is_active ? 'default' : 'outline'} className="h-6 text-xs px-2"
+                              onClick={() => handleTogglePlanActive(plan)}>
+                              {plan.is_active ? 'Active' : 'Inactive'}
+                            </Button>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{plan.sort_order}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
+                                onClick={() => { setEditingPlan(plan); resetPlanForm(plan); setPlanDialogOpen(true); }}>
+                                <Settings className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500"
+                                onClick={() => handleDeletePlan(plan)}>
+                                <XCircle className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* ═══ ORG DETAIL SHEET ═══ */}
           <Sheet open={!!selectedOrg} onOpenChange={(open) => { if (!open) setSelectedOrg(null); }}>
             <SheetContent className="sm:max-w-md w-full overflow-y-auto">
@@ -1599,6 +1778,73 @@ export default function AdminDashboard() {
                   </DialogFooter>
                 </div>
               )}
+            </DialogContent>
+          </Dialog>
+
+          {/* ═══ PLAN DIALOG ═══ */}
+          <Dialog open={planDialogOpen} onOpenChange={setPlanDialogOpen}>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-secondary" />
+                  {editingPlan ? 'Edit Plan' : 'Create Plan'}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Name *</Label>
+                    <Input value={planForm.name} onChange={e => setPlanForm(p => ({ ...p, name: e.target.value }))} placeholder="Pro Plan" />
+                  </div>
+                  <div>
+                    <Label>Slug *</Label>
+                    <Input value={planForm.slug} onChange={e => setPlanForm(p => ({ ...p, slug: e.target.value }))} placeholder="pro" />
+                  </div>
+                </div>
+                <div>
+                  <Label>Description</Label>
+                  <Input value={planForm.description} onChange={e => setPlanForm(p => ({ ...p, description: e.target.value }))} placeholder="Best for growing teams" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Monthly Price ($)</Label>
+                    <Input type="number" min={0} step={0.01} value={planForm.price_monthly}
+                      onChange={e => setPlanForm(p => ({ ...p, price_monthly: parseFloat(e.target.value) || 0 }))} />
+                  </div>
+                  <div>
+                    <Label>Yearly Price ($)</Label>
+                    <Input type="number" min={0} step={0.01} value={planForm.price_yearly}
+                      onChange={e => setPlanForm(p => ({ ...p, price_yearly: parseFloat(e.target.value) || 0 }))} />
+                  </div>
+                </div>
+                <div>
+                  <Label>Features (comma-separated)</Label>
+                  <Textarea value={planForm.features} onChange={e => setPlanForm(p => ({ ...p, features: e.target.value }))}
+                    placeholder="Up to 10 team members, Priority support, Custom domain" rows={2} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Sort Order</Label>
+                    <Input type="number" min={0} step={1} value={planForm.sort_order}
+                      onChange={e => setPlanForm(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))} />
+                  </div>
+                  <div className="flex items-end pb-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={planForm.is_active}
+                        onChange={e => setPlanForm(p => ({ ...p, is_active: e.target.checked }))}
+                        className="rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+                      <span className="text-sm font-medium">Active</span>
+                    </label>
+                  </div>
+                </div>
+                <DialogFooter className="pt-2 gap-2">
+                  <Button variant="outline" onClick={() => setPlanDialogOpen(false)} disabled={savingPlan}>Cancel</Button>
+                  <Button onClick={handleSavePlan} disabled={!planForm.name.trim() || !planForm.slug.trim() || savingPlan}>
+                    {savingPlan ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    {editingPlan ? 'Update Plan' : 'Create Plan'}
+                  </Button>
+                </DialogFooter>
+              </div>
             </DialogContent>
           </Dialog>
         </div>
