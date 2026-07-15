@@ -1,5 +1,5 @@
 // ============================================================
-// B2B API Client — wraps the b2b-api edge function
+// B2B API Client — calls the Express API server (/api/b2b)
 // ============================================================
 
 import { supabase } from '@/integrations/supabase/client';
@@ -12,7 +12,7 @@ import type {
   OrgMemberRole,
 } from '../b2b-types';
 
-const B2B_FUNCTION = 'b2b-api';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://dalastudioshowcase.onrender.com/api';
 
 async function b2bFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const { data: sessionData } = await supabase.auth.getSession();
@@ -22,18 +22,23 @@ async function b2bFetch<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error('No active session');
   }
 
-  const { data, error } = await supabase.functions.invoke(B2B_FUNCTION, {
-    method: (options?.method || 'GET') as 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
-    body: options?.body ? JSON.parse(options.body as string) : undefined,
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
+    method: options?.method || 'GET',
     headers: {
       'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
       ...(options?.headers as Record<string, string>),
     },
+    body: options?.body || undefined,
   });
 
-  // Supabase functions invoke returns the parsed response
-  if (error) throw error;
-  return data as T;
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(body.error || `HTTP ${res.status}`);
+  }
+
+  return res.json();
 }
 
 // ── Org CRUD ──
