@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,10 +39,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, Building2, Banknote, Image as ImageIcon, ChevronLeft, ChevronRight, Bell, LogOut, LayoutDashboard, Edit, Trash2 } from 'lucide-react';
+import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, 
+RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, 
+Building2, Banknote, Image as ImageIcon, ChevronLeft, ChevronRight, Bell, LogOut, LayoutDashboard, Edit, Trash2, 
+ExternalLink, Calendar, FileText, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
+import { get, post, patch, del } from '@/lib/api-client';
 import { downloadCSV } from '@/lib/export';
 import { usePermissions } from '@/hooks/usePermissions';
 import SiteSettingsTab from '@/components/admin/SiteSettingsTab';
@@ -172,6 +176,65 @@ export default function AdminDashboard() {
   const [manualPayments, setManualPayments] = useState<ManualPayment[]>([]);
   const [loadingManualPayments, setLoadingManualPayments] = useState(false);
   const [processingManualPayment, setProcessingManualPayment] = useState<string | null>(null);
+
+  // B2B — Organizations
+  const [orgs, setOrgs] = useState<any[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState(false);
+  const [orgSearch, setOrgSearch] = useState('');
+  const [selectedOrg, setSelectedOrg] = useState<any | null>(null);
+  const [orgStatusUpdating, setOrgStatusUpdating] = useState(false);
+  const [confirmOrgAction, setConfirmOrgAction] = useState<{ org: any; newStatus: string } | null>(null);
+
+  // B2B — Verifications
+  const [verifications, setVerifications] = useState<any[]>([]);
+  const [verificationsLoading, setVerificationsLoading] = useState(false);
+  const [verifStatusFilter, setVerifStatusFilter] = useState('pending');
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewingVerification, setReviewingVerification] = useState<any | null>(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [reviewingStatus, setReviewingStatus] = useState<'verified' | 'rejected' | null>(null);
+  const [reviewProcessing, setReviewProcessing] = useState(false);
+
+  // B2B — Plans
+  const [plans, setPlans] = useState<any[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [planDialogOpen, setPlanDialogOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<any | null>(null);
+  const [planForm, setPlanForm] = useState({
+    name: '', slug: '', description: '',
+    price_monthly: 0, price_yearly: 0,
+    features: '', is_active: true, sort_order: 0,
+  });
+  const [savingPlan, setSavingPlan] = useState(false);
+
+  // B2B — Contracts
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [contractsLoading, setContractsLoading] = useState(false);
+  const [contractSearch, setContractSearch] = useState('');
+  const [contractStatusFilter, setContractStatusFilter] = useState('');
+
+  // B2B — Billing
+  const [billingTab, setBillingTab] = useState<'invoices' | 'history'>('invoices');
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState('');
+  const [billingHistory, setBillingHistory] = useState<any[]>([]);
+  const [billingHistoryLoading, setBillingHistoryLoading] = useState(false);
+
+  // B2B — Compliance
+  const [complianceReports, setComplianceReports] = useState<any[]>([]);
+  const [complianceLoading, setComplianceLoading] = useState(false);
+
+  // B2B — Hiring
+  const [hiringTab, setHiringTab] = useState<'jobs' | 'applications'>('jobs');
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [jobSearch, setJobSearch] = useState('');
+  const [jobTypeFilter, setJobTypeFilter] = useState('');
+  const [jobStatusFilter, setJobStatusFilter] = useState('');
+  const [applications, setApplications] = useState<any[]>([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(false);
+  const [applicationStatusFilter, setApplicationStatusFilter] = useState('');
 
   // Service Fee
   const [serviceFeePct, setServiceFeePct] = useState(5);
@@ -640,6 +703,229 @@ export default function AdminDashboard() {
     }
   };
 
+  // ── B2B: Organizations ──
+  const fetchOrgs = useCallback(async () => {
+    setOrgsLoading(true);
+    try {
+      const result = await get<any[]>('/admin/orgs', { search: orgSearch || undefined, limit: 100 });
+      setOrgs(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load organizations');
+    } finally {
+      setOrgsLoading(false);
+    }
+  }, [orgSearch]);
+
+  useEffect(() => { if (user && isAdminAccess) fetchOrgs(); }, [user, isAdminAccess, fetchOrgs]);
+
+  const handleOrgStatusUpdate = useCallback(async () => {
+    if (!confirmOrgAction) return;
+    setOrgStatusUpdating(true);
+    try {
+      await patch(`/admin/orgs/${confirmOrgAction.org.id}/status`, { status: confirmOrgAction.newStatus });
+      toast.success(`Organization ${confirmOrgAction.newStatus === 'suspended' ? 'suspended' : confirmOrgAction.newStatus === 'active' ? 'reactivated' : 'disabled'} successfully`);
+      setSelectedOrg(null);
+      setConfirmOrgAction(null);
+      fetchOrgs();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update org status');
+    } finally {
+      setOrgStatusUpdating(false);
+    }
+  }, [confirmOrgAction, fetchOrgs]);
+
+  // ── B2B: Verifications ──
+  const fetchVerifications = useCallback(async () => {
+    setVerificationsLoading(true);
+    try {
+      const result = await get<any[]>('/admin/verifications', { status: verifStatusFilter || undefined, limit: 100 });
+      setVerifications(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load verifications');
+    } finally {
+      setVerificationsLoading(false);
+    }
+  }, [verifStatusFilter]);
+
+  useEffect(() => { if (user && isAdminAccess) fetchVerifications(); }, [user, isAdminAccess, fetchVerifications]);
+
+  const handleReviewVerification = async () => {
+    if (!reviewingVerification || !reviewingStatus) return;
+    setReviewProcessing(true);
+    try {
+      await patch(`/admin/verifications/${reviewingVerification.id}/review`, { status: reviewingStatus, notes: reviewNotes || undefined });
+      toast.success(`Verification ${reviewingStatus}`);
+      setReviewDialogOpen(false);
+      setReviewingVerification(null);
+      setReviewNotes('');
+      setReviewingStatus(null);
+      fetchVerifications();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to review verification');
+    } finally {
+      setReviewProcessing(false);
+    }
+  };
+
+  // ── B2B: Plans ──
+  const fetchPlans = useCallback(async () => {
+    setPlansLoading(true);
+    try {
+      const result = await get<any[]>('/admin/billing/plans');
+      setPlans(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load plans');
+    } finally {
+      setPlansLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (user && isAdminAccess) fetchPlans(); }, [user, isAdminAccess, fetchPlans]);
+
+  const resetPlanForm = (plan?: any) => {
+    setPlanForm({
+      name: plan?.name || '', slug: plan?.slug || '', description: plan?.description || '',
+      price_monthly: plan?.price_monthly ?? 0, price_yearly: plan?.price_yearly ?? 0,
+      features: (plan?.features || []).join(', '), is_active: plan?.is_active ?? true, sort_order: plan?.sort_order ?? 0,
+    });
+  };
+
+  const handleSavePlan = async () => {
+    if (!planForm.name.trim() || !planForm.slug.trim()) return;
+    setSavingPlan(true);
+    try {
+      const body = {
+        name: planForm.name.trim(), slug: planForm.slug.trim(), description: planForm.description.trim() || undefined,
+        price_monthly: planForm.price_monthly, price_yearly: planForm.price_yearly,
+        features: planForm.features.split(',').map(s => s.trim()).filter(Boolean),
+        is_active: planForm.is_active, sort_order: planForm.sort_order,
+      };
+      if (editingPlan) { await patch(`/admin/billing/plans/${editingPlan.id}`, body); toast.success('Plan updated'); }
+      else { await post('/admin/billing/plans', body); toast.success('Plan created'); }
+      setPlanDialogOpen(false);
+      setEditingPlan(null);
+      fetchPlans();
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to save plan'); }
+    finally { setSavingPlan(false); }
+  };
+
+  const handleDeletePlan = async (plan: any) => {
+    if (!confirm(`Delete plan "${plan.name}"? ${plan.is_active ? ' It will be deactivated if orgs use it.' : ''}`)) return;
+    try { await del(`/admin/billing/plans/${plan.id}`); toast.success('Plan deleted'); fetchPlans(); }
+    catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to delete plan'); }
+  };
+
+  const handleTogglePlanActive = async (plan: any) => {
+    try { await patch(`/admin/billing/plans/${plan.id}`, { is_active: !plan.is_active }); toast.success(`Plan ${plan.is_active ? 'deactivated' : 'activated'}`); fetchPlans(); }
+    catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to update plan'); }
+  };
+
+  // ── B2B: Contracts ──
+  const fetchContracts = useCallback(async () => {
+    setContractsLoading(true);
+    try {
+      const params: Record<string, string | number | undefined> = { limit: 100 };
+      if (contractStatusFilter) params.status = contractStatusFilter;
+      if (contractSearch) params.search = contractSearch;
+      const result = await get<any[]>('/admin/contracts', params);
+      setContracts(result.data || []);
+    } catch (err) { toast.error(err instanceof Error ? err.message : 'Failed to load contracts'); }
+    finally { setContractsLoading(false); }
+  }, [contractStatusFilter, contractSearch]);
+
+  useEffect(() => { if (user && isAdminAccess) fetchContracts(); }, [user, isAdminAccess, fetchContracts]);
+
+  const [contractSearchInput, setContractSearchInput] = useState('');
+  useEffect(() => { const t = setTimeout(() => setContractSearch(contractSearchInput), 400); return () => clearTimeout(t); }, [contractSearchInput]);
+
+  // ── B2B: Billing ──
+  const fetchInvoices = useCallback(async () => {
+    setInvoicesLoading(true);
+    try {
+      const params: Record<string, string | undefined> = {};
+      if (invoiceStatusFilter) params.status = invoiceStatusFilter;
+      const result = await get<any[]>('/admin/billing/invoices', params);
+      setInvoices(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load invoices');
+    } finally {
+      setInvoicesLoading(false);
+    }
+  }, [invoiceStatusFilter]);
+
+  useEffect(() => { if (user && isAdminAccess) fetchInvoices(); }, [user, isAdminAccess, fetchInvoices]);
+
+  const fetchBillingHistory = useCallback(async () => {
+    setBillingHistoryLoading(true);
+    try {
+      const result = await get<any[]>('/admin/billing/history');
+      setBillingHistory(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load billing history');
+    } finally {
+      setBillingHistoryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (user && isAdminAccess) fetchBillingHistory(); }, [user, isAdminAccess, fetchBillingHistory]);
+
+  // ── B2B: Compliance ──
+  const fetchComplianceReports = useCallback(async () => {
+    setComplianceLoading(true);
+    try {
+      const result = await get<any[]>('/admin/compliance/reports');
+      setComplianceReports(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load compliance reports');
+    } finally {
+      setComplianceLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (user && isAdminAccess) fetchComplianceReports(); }, [user, isAdminAccess, fetchComplianceReports]);
+
+  // ── B2B: Hiring ──
+  const fetchJobs = useCallback(async () => {
+    setJobsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (jobSearch) params.set('search', jobSearch);
+      if (jobTypeFilter) params.set('type', jobTypeFilter);
+      if (jobStatusFilter) params.set('status', jobStatusFilter);
+      const result = await get<any[]>(`/admin/jobs?${params.toString()}`);
+      setJobs(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load job posts');
+    } finally {
+      setJobsLoading(false);
+    }
+  }, [jobSearch, jobTypeFilter, jobStatusFilter]);
+
+  useEffect(() => { if (user && isAdminAccess) fetchJobs(); }, [user, isAdminAccess, fetchJobs]);
+
+  const fetchApplications = useCallback(async () => {
+    setApplicationsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (applicationStatusFilter) params.set('status', applicationStatusFilter);
+      const result = await get<any[]>(`/admin/applications?${params.toString()}`);
+      setApplications(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load applications');
+    } finally {
+      setApplicationsLoading(false);
+    }
+  }, [applicationStatusFilter]);
+
+  useEffect(() => { if (user && isAdminAccess) fetchApplications(); }, [user, isAdminAccess, fetchApplications]);
+
+  // Search debounce for jobs
+  const [jobSearchInput, setJobSearchInput] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setJobSearch(jobSearchInput), 400);
+    return () => clearTimeout(timer);
+  }, [jobSearchInput]);
+
   // ── Export handlers ──
   const exportServices = () => {
     downloadCSV(
@@ -795,6 +1081,16 @@ export default function AdminDashboard() {
     { value: 'site-settings', label: 'Site Settings', icon: <Settings className="w-4 h-4" /> },
   ];
 
+  const B2B_NAV_ITEMS: { value: string; label: string; icon: React.ReactNode }[] = [
+    { value: 'organizations', label: 'Organizations', icon: <Building2 className="w-4 h-4" /> },
+    { value: 'verifications', label: 'Verifications', icon: <Shield className="w-4 h-4" /> },
+    { value: 'plans', label: 'Subscription Plans', icon: <CreditCard className="w-4 h-4" /> },
+    { value: 'contracts', label: 'Contracts', icon: <FileText className="w-4 h-4" /> },
+    { value: 'hiring', label: 'Hiring', icon: <Briefcase className="w-4 h-4" /> },
+    { value: 'billing', label: 'Billing', icon: <DollarSign className="w-4 h-4" /> },
+    { value: 'compliance', label: 'Compliance', icon: <Shield className="w-4 h-4" /> },
+  ];
+
   const pendingManualCount = manualPayments.filter((p) => p.status === 'pending').length;
   const showPayoutBadge = pendingPayouts.length > 0;
   const showDisputeBadge = disputedOrders.length > 0;
@@ -838,6 +1134,29 @@ export default function AdminDashboard() {
               {sidebarOpen && item.value === 'manual-payments' && showManualBadge && (
                 <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">{pendingManualCount}</span>
               )}
+            </button>
+          ))}
+          {sidebarOpen && (
+            <div className="pt-4 pb-1 px-3">
+              <div className="flex items-center gap-2">
+                <span className="h-px flex-1 bg-gray-700/50"></span>
+                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">B2B</span>
+                <span className="h-px flex-1 bg-gray-700/50"></span>
+              </div>
+            </div>
+          )}
+          {B2B_NAV_ITEMS.map((item) => (
+            <button
+              key={item.value}
+              onClick={() => setActiveTab(item.value)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                activeTab === item.value
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              {item.icon}
+              {sidebarOpen && <span className="truncate">{item.label}</span>}
             </button>
           ))}
         </nav>
@@ -1475,6 +1794,478 @@ export default function AdminDashboard() {
 
           {/* ═══ SITE SETTINGS ═══ */}
           {activeTab === 'site-settings' && <SiteSettingsTab />}
+
+          {/* ═══ B2B: ORGANIZATIONS ═══ */}
+          {activeTab === 'organizations' && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2"><Building2 className="w-5 h-5 text-secondary" /> Organization Management</CardTitle>
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+                      <Input placeholder="Search by name..." className="pl-9 w-60" value={orgSearch} onChange={e => setOrgSearch(e.target.value)} />
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => { const csv = orgs.map((o: any) => ({ Name: o.name, Industry: o.industry || '—', Size: o.size || '—', Members: o.member_count ?? 0, Plan: o.plan?.name || 'Free', Created: new Date(o.created_at).toLocaleDateString() })); downloadCSV(csv, 'organizations'); }}>
+                      <Download className="w-3.5 h-3.5 mr-1" /> Export CSV
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {orgsLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                : orgs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <Building2 className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">No Organizations Yet</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">Organizations will appear here once users sign up and create one.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow><TableHead>Name</TableHead><TableHead>Industry</TableHead><TableHead>Size</TableHead><TableHead>Members</TableHead><TableHead>Plan</TableHead><TableHead>Created</TableHead></TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orgs.map((org: any) => (
+                        <TableRow key={org.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedOrg(org)}>
+                          <TableCell className="font-medium text-purple-600 hover:underline">{org.name}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{org.industry || '—'}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{org.size || '—'}</TableCell>
+                          <TableCell><Badge variant="secondary">{org.member_count ?? 0}</Badge></TableCell>
+                          <TableCell><Badge variant={org.plan ? 'default' : 'outline'}>{org.plan?.name || 'Free'}</Badge></TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{new Date(org.created_at).toLocaleDateString()}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ═══ B2B: VERIFICATIONS ═══ */}
+          {activeTab === 'verifications' && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2"><Shield className="w-5 h-5 text-secondary" /> Org Verification Queue</CardTitle>
+                  <div className="flex items-center gap-2">
+                    {['pending', 'verified', 'rejected'].map(s => (
+                      <Button key={s} size="sm" variant={verifStatusFilter === s ? 'default' : 'outline'}
+                        className={verifStatusFilter === s ? '' : 'text-muted-foreground'} onClick={() => setVerifStatusFilter(s)}>
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {verificationsLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                : verifications.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <Shield className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">No {verifStatusFilter} verifications</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">No organizations have submitted verification requests yet.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow><TableHead>Organization</TableHead><TableHead>Business Name</TableHead><TableHead>Reg Number</TableHead><TableHead>Tax ID</TableHead><TableHead>Documents</TableHead><TableHead>Submitted</TableHead><TableHead className="text-right">Actions</TableHead></TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {verifications.map((v: any) => (
+                        <TableRow key={v.id}>
+                          <TableCell className="font-medium">{v.organization?.name || v.org_id?.slice(0, 8) || '—'}</TableCell>
+                          <TableCell className="text-sm">{v.business_name || '—'}</TableCell>
+                          <TableCell className="text-sm font-mono">{v.registration_number || '—'}</TableCell>
+                          <TableCell className="text-sm font-mono">{v.tax_id || '—'}</TableCell>
+                          <TableCell>{v.document_urls?.length > 0 ? v.document_urls.map((url: string, i: number) => (<a key={i} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-purple-600 hover:underline flex items-center gap-0.5"><FileText className="w-3 h-3" /> Doc {i + 1}</a>)) : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{new Date(v.created_at).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">
+                            {v.status === 'pending' ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={() => { setReviewingVerification(v); setReviewingStatus('verified'); setReviewDialogOpen(true); }}><CheckCircle2 className="w-3 h-3 mr-0.5" /> Approve</Button>
+                                <Button size="sm" variant="outline" className="h-7 text-xs text-red-600" onClick={() => { setReviewingVerification(v); setReviewingStatus('rejected'); setReviewDialogOpen(true); }}><XCircle className="w-3 h-3 mr-0.5" /> Reject</Button>
+                              </div>
+                            ) : v.status === 'verified' ? <Badge variant="default" className="text-xs bg-green-100 text-green-800 border-green-200">Verified</Badge>
+                            : <Badge variant="outline" className="text-xs text-red-600 border-red-200">Rejected</Badge>}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ═══ B2B: PLANS ═══ */}
+          {activeTab === 'plans' && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2"><CreditCard className="w-5 h-5 text-secondary" /> Subscription Plans</CardTitle>
+                  <Button size="sm" onClick={() => { setEditingPlan(null); resetPlanForm(); setPlanDialogOpen(true); }}><CreditCard className="w-3.5 h-3.5 mr-1" /> Create Plan</Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {plansLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                : plans.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <CreditCard className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">No Plans Yet</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">Create your first subscription plan.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow><TableHead>Name</TableHead><TableHead>Slug</TableHead><TableHead>Monthly</TableHead><TableHead>Yearly</TableHead><TableHead>Features</TableHead><TableHead>Active</TableHead><TableHead>Sort</TableHead><TableHead className="text-right">Actions</TableHead></TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {plans.map((plan: any) => (
+                        <TableRow key={plan.id} className={plan.is_active ? '' : 'opacity-50'}>
+                          <TableCell className="font-medium">{plan.name}</TableCell>
+                          <TableCell className="text-sm font-mono text-muted-foreground">{plan.slug}</TableCell>
+                          <TableCell>${Number(plan.price_monthly).toFixed(2)}</TableCell>
+                          <TableCell>${Number(plan.price_yearly).toFixed(2)}</TableCell>
+                          <TableCell className="max-w-[200px]">
+                            <div className="flex flex-wrap gap-1">
+                              {(plan.features || []).slice(0, 3).map((f: string, i: number) => (<Badge key={i} variant="secondary" className="text-xs">{f}</Badge>))}
+                              {(plan.features || []).length > 3 && <Badge variant="outline" className="text-xs">+{plan.features.length - 3}</Badge>}
+                            </div>
+                          </TableCell>
+                          <TableCell><Button size="sm" variant={plan.is_active ? 'default' : 'outline'} className="h-6 text-xs px-2" onClick={() => handleTogglePlanActive(plan)}>{plan.is_active ? 'Active' : 'Inactive'}</Button></TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{plan.sort_order}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setEditingPlan(plan); resetPlanForm(plan); setPlanDialogOpen(true); }}><Settings className="w-3.5 h-3.5" /></Button>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDeletePlan(plan)}><XCircle className="w-3.5 h-3.5" /></Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ═══ B2B: CONTRACTS ═══ */}
+          {activeTab === 'contracts' && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2"><FileText className="w-5 h-5 text-secondary" /> Contracts</CardTitle>
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+                      <Input placeholder="Search by title..." className="pl-9 w-56" value={contractSearchInput} onChange={e => setContractSearchInput(e.target.value)} />
+                    </div>
+                    <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={contractStatusFilter} onChange={e => setContractStatusFilter(e.target.value)}>
+                      <option value="">All statuses</option>
+                      <option value="draft">Draft</option><option value="sent">Sent</option><option value="signed">Signed</option>
+                      <option value="active">Active</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {contractsLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                : contracts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <FileText className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">No Contracts Found</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">No contracts match your current filters.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow><TableHead>Organization</TableHead><TableHead>Title</TableHead><TableHead>Talent</TableHead><TableHead>Type</TableHead><TableHead>Value</TableHead><TableHead>Status</TableHead><TableHead>Created</TableHead></TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {contracts.map((c: any) => (
+                        <TableRow key={c.id}>
+                          <TableCell className="font-medium text-sm">{c.organization?.name || c.org_id?.slice(0, 8)}</TableCell>
+                          <TableCell className="text-sm max-w-[200px] truncate">{c.title}</TableCell>
+                          <TableCell className="text-sm">{c.talent?.full_name || '—'}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{c.contract_type?.replace(/_/g, ' ')}</TableCell>
+                          <TableCell className="text-sm font-medium">{c.currency || 'NGN'} {Number(c.total_value || 0).toLocaleString()}</TableCell>
+                          <TableCell>
+                            <Badge variant={c.status === 'active' || c.status === 'completed' ? 'default' : c.status === 'draft' || c.status === 'sent' ? 'secondary' : 'outline'}
+                              className={`text-xs ${c.status === 'completed' ? 'bg-green-100 text-green-800 border-green-200' : c.status === 'active' ? 'bg-blue-100 text-blue-800 border-blue-200' : c.status === 'cancelled' ? 'text-red-600 border-red-200' : ''}`}>{c.status}</Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleDateString()}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ═══ B2B: BILLING ═══ */}
+          {activeTab === 'billing' && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 border-b border-border pb-1">
+                <button onClick={() => setBillingTab('invoices')} className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-[3px] ${billingTab === 'invoices' ? 'border-purple-600 text-purple-600' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>Invoices</button>
+                <button onClick={() => setBillingTab('history')} className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-[3px] ${billingTab === 'history' ? 'border-purple-600 text-purple-600' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>Billing History</button>
+              </div>
+
+              {billingTab === 'invoices' && (
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-secondary" /> Invoices</CardTitle>
+                      <div className="flex items-center gap-2">
+                        {['', 'pending', 'paid', 'overdue', 'cancelled', 'refunded'].map(s => (
+                          <Button key={s} size="sm" variant={invoiceStatusFilter === s ? 'default' : 'outline'}
+                            className={invoiceStatusFilter === s ? '' : 'text-muted-foreground'}
+                            onClick={() => setInvoiceStatusFilter(s)}>
+                            {s === '' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {invoicesLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                    : invoices.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-center">
+                        <DollarSign className="w-12 h-12 text-gray-300 mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1">No Invoices</h3>
+                        <p className="text-sm text-muted-foreground max-w-md">No billing invoices match your filters.</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow><TableHead>Organization</TableHead><TableHead>Invoice #</TableHead><TableHead>Plan</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead>Period</TableHead><TableHead>Paid At</TableHead></TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {invoices.map((inv: any) => (
+                            <TableRow key={inv.id}>
+                              <TableCell className="font-medium text-sm">{inv.organization?.name || inv.org_id?.slice(0, 8)}</TableCell>
+                              <TableCell className="text-sm font-mono text-muted-foreground">{inv.invoice_number}</TableCell>
+                              <TableCell className="text-sm">{inv.plan?.name || '—'}</TableCell>
+                              <TableCell className="text-sm font-medium">{inv.currency || 'USD'} {Number(inv.amount || 0).toLocaleString()}</TableCell>
+                              <TableCell>
+                                <Badge variant={inv.status === 'paid' ? 'default' : inv.status === 'pending' ? 'secondary' : 'outline'}
+                                  className={`text-xs ${inv.status === 'paid' ? 'bg-green-100 text-green-800 border-green-200' : inv.status === 'overdue' ? 'text-red-600 border-red-200' : ''}`}>{inv.status}</Badge>
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{inv.period_start ? `${new Date(inv.period_start).toLocaleDateString()} – ${inv.period_end ? new Date(inv.period_end).toLocaleDateString() : '…'}` : '—'}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{inv.paid_at ? new Date(inv.paid_at).toLocaleDateString() : '—'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {billingTab === 'history' && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><CreditCard className="w-5 h-5 text-secondary" /> Billing History</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {billingHistoryLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                    : billingHistory.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-center">
+                        <CreditCard className="w-12 h-12 text-gray-300 mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1">No Billing History</h3>
+                        <p className="text-sm text-muted-foreground max-w-md">Billing changes and plan updates will appear here.</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow><TableHead>Organization</TableHead><TableHead>Action</TableHead><TableHead>From Plan</TableHead><TableHead>To Plan</TableHead><TableHead>Amount</TableHead><TableHead>By</TableHead><TableHead>Date</TableHead></TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {billingHistory.map((h: any) => (
+                            <TableRow key={h.id}>
+                              <TableCell className="font-medium text-sm">{h.organization?.name || h.org_id?.slice(0, 8)}</TableCell>
+                              <TableCell className="text-sm capitalize">{h.change_type?.replace(/_/g, ' ') || h.action || '—'}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{h.from_plan?.name || '—'}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{h.to_plan?.name || '—'}</TableCell>
+                              <TableCell className="text-sm font-medium">{h.amount ? `${h.currency || 'USD'} ${Number(h.amount).toLocaleString()}` : '—'}</TableCell>
+                              <TableCell className="text-sm">{h.changed_by_user?.full_name || (h.changed_by?.slice(0, 8)) || '—'}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{new Date(h.created_at).toLocaleDateString()}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* ═══ B2B: HIRING ═══ */}
+          {activeTab === 'hiring' && (
+            <div className="space-y-4">
+              {/* Sub-tabs */}
+              <div className="flex gap-4 border-b pb-1">
+                <button onClick={() => setHiringTab('jobs')}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-[3px] ${hiringTab === 'jobs' ? 'border-purple-600 text-purple-600' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+                  Job Posts
+                </button>
+                <button onClick={() => setHiringTab('applications')}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-[3px] ${hiringTab === 'applications' ? 'border-purple-600 text-purple-600' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+                  Pipeline Applications
+                </button>
+              </div>
+
+              {/* Job Posts */}
+              {hiringTab === 'jobs' && (
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-secondary" /> Job Posts</CardTitle>
+                      <div className="flex items-center gap-3">
+                        <Input placeholder="Search jobs..." className="max-w-[200px] h-8 text-sm"
+                          value={jobSearchInput} onChange={(e) => setJobSearchInput(e.target.value)} />
+                        <select value={jobTypeFilter} onChange={(e) => setJobTypeFilter(e.target.value)}
+                          className="h-8 text-sm border rounded px-2 bg-background">
+                          <option value="">All Types</option>
+                          <option value="part-time">Part-time</option>
+                          <option value="internship">Internship</option>
+                        </select>
+                        <select value={jobStatusFilter} onChange={(e) => setJobStatusFilter(e.target.value)}
+                          className="h-8 text-sm border rounded px-2 bg-background">
+                          <option value="">All Status</option>
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {jobsLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                    : jobs.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-center">
+                        <Briefcase className="w-12 h-12 text-gray-300 mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1">No Job Posts</h3>
+                        <p className="text-sm text-muted-foreground max-w-md">No jobs have been created across organizations yet.</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow><TableHead>Title</TableHead><TableHead>Organization</TableHead><TableHead>Company</TableHead><TableHead>Type</TableHead><TableHead>Status</TableHead><TableHead>Created</TableHead></TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {jobs.map((j: any) => (
+                            <TableRow key={j.id}>
+                              <TableCell className="font-medium text-sm max-w-[250px] truncate">{j.title}</TableCell>
+                              <TableCell className="text-sm">{j.organization?.name || j.org_id?.slice(0, 8) || '—'}</TableCell>
+                              <TableCell className="text-sm">{j.company?.company_name || j.company?.full_name || '—'}</TableCell>
+                              <TableCell className="text-sm capitalize">{j.type}</TableCell>
+                              <TableCell>
+                                <Badge className={j.is_active ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-100'}>{j.is_active ? 'Active' : 'Inactive'}</Badge>
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{new Date(j.created_at).toLocaleDateString()}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Pipeline Applications */}
+              {hiringTab === 'applications' && (
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-secondary" /> Pipeline Applications</CardTitle>
+                      <div className="flex items-center gap-3">
+                        <select value={applicationStatusFilter} onChange={(e) => setApplicationStatusFilter(e.target.value)}
+                          className="h-8 text-sm border rounded px-2 bg-background">
+                          <option value="">All Status</option>
+                          <option value="pending">Pending</option>
+                          <option value="reviewed">Reviewed</option>
+                          <option value="accepted">Accepted</option>
+                          <option value="rejected">Rejected</option>
+                        </select>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {applicationsLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                    : applications.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 text-center">
+                        <Users className="w-12 h-12 text-gray-300 mb-4" />
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1">No Applications</h3>
+                        <p className="text-sm text-muted-foreground max-w-md">Job applications from all organizations will appear here.</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow><TableHead>Applicant</TableHead><TableHead>Job Title</TableHead><TableHead>Organization</TableHead><TableHead>Stage</TableHead><TableHead>Date</TableHead></TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {applications.map((a: any) => (
+                            <TableRow key={a.id}>
+                              <TableCell className="font-medium text-sm">{a.student?.full_name || a.student_id?.slice(0, 8)}</TableCell>
+                              <TableCell className="text-sm max-w-[250px] truncate">{a.job?.title || '—'}</TableCell>
+                              <TableCell className="text-sm">{a.job?.organization?.name || '—'}</TableCell>
+                              <TableCell>
+                                <Badge className={
+                                  a.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                  a.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                                  a.status === 'reviewed' ? 'bg-blue-100 text-blue-600' :
+                                  'bg-yellow-100 text-yellow-700'
+                                }>{a.status}</Badge>
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{new Date(a.created_at).toLocaleDateString()}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* ═══ B2B: COMPLIANCE ═══ */}
+          {activeTab === 'compliance' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Shield className="w-5 h-5 text-secondary" /> Compliance Reports</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {complianceLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                : complianceReports.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <Shield className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">No Compliance Reports</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">Compliance reports generated by organizations will appear here.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow><TableHead>Organization</TableHead><TableHead>Report Type</TableHead><TableHead>Title</TableHead><TableHead>Generated At</TableHead></TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {complianceReports.map((r: any) => (
+                        <TableRow key={r.id}>
+                          <TableCell className="font-medium text-sm">{r.organization?.name || r.org_id?.slice(0, 8)}</TableCell>
+                          <TableCell className="text-sm capitalize">{r.report_type?.replace(/_/g, ' ')}</TableCell>
+                          <TableCell className="text-sm max-w-[300px] truncate">{r.title || '—'}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{r.generated_at ? new Date(r.generated_at).toLocaleDateString() : new Date(r.created_at).toLocaleDateString()}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 
@@ -1564,6 +2355,156 @@ export default function AdminDashboard() {
               {processingPayout ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />} Mark as Paid
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ B2B: Org Detail Dialog ═══ */}
+      <Dialog open={!!selectedOrg} onOpenChange={(o) => { if (!o) setSelectedOrg(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Building2 className="w-5 h-5 text-secondary" /> {selectedOrg?.name || 'Organization'}</DialogTitle>
+          </DialogHeader>
+          {selectedOrg && (
+            <div className="space-y-4">
+              {selectedOrg.slug && <p className="text-xs font-mono text-muted-foreground">/{selectedOrg.slug}</p>}
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">Status</span>
+                <div className="flex items-center gap-2">
+                  <Badge variant={selectedOrg.status === 'active' ? 'default' : selectedOrg.status === 'suspended' ? 'secondary' : 'outline'} className={selectedOrg.status === 'suspended' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : selectedOrg.status === 'disabled' ? 'bg-red-100 text-red-700' : ''}>{selectedOrg.status || 'active'}</Badge>
+                  {selectedOrg.status === 'active' && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs text-yellow-600 border-yellow-200 hover:bg-yellow-50" onClick={() => setConfirmOrgAction({ org: selectedOrg, newStatus: 'suspended' })}>
+                      Suspend
+                    </Button>
+                  )}
+                  {(selectedOrg.status === 'suspended' || selectedOrg.status === 'disabled') && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs text-green-600 border-green-200 hover:bg-green-50" onClick={() => setConfirmOrgAction({ org: selectedOrg, newStatus: 'active' })}>
+                      Reactivate
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><span className="text-xs font-medium text-muted-foreground uppercase">Industry</span><p className="text-sm font-medium mt-1">{selectedOrg.industry || '—'}</p></div>
+                <div><span className="text-xs font-medium text-muted-foreground uppercase">Size</span><p className="text-sm font-medium mt-1">{selectedOrg.size || '—'}</p></div>
+              </div>
+              {selectedOrg.description && <div><span className="text-xs font-medium text-muted-foreground uppercase">Description</span><p className="text-sm mt-1 text-gray-700">{selectedOrg.description}</p></div>}
+              <Separator />
+              <div className="grid grid-cols-2 gap-4">
+                <div><span className="text-xs font-medium text-muted-foreground uppercase">Plan</span><div className="mt-1"><Badge variant={selectedOrg.plan ? 'default' : 'outline'}>{selectedOrg.plan?.name || 'Free'}</Badge></div>{selectedOrg.plan && <p className="text-xs text-muted-foreground mt-1">{selectedOrg.plan.interval === 'month' ? 'Monthly' : 'Yearly'} · ${Number(selectedOrg.plan.price).toFixed(2)}</p>}</div>
+                <div><span className="text-xs font-medium text-muted-foreground uppercase">Members</span><p className="text-lg font-semibold mt-1">{selectedOrg.member_count ?? 0}</p></div>
+              </div>
+              {selectedOrg.subscription_status && <div><span className="text-xs font-medium text-muted-foreground uppercase">Subscription</span><Badge className="mt-1" variant={selectedOrg.subscription_status === 'active' ? 'default' : 'secondary'}>{selectedOrg.subscription_status}</Badge></div>}
+              <Separator />
+              {selectedOrg.website_url && <div><span className="text-xs font-medium text-muted-foreground uppercase">Website</span><a href={selectedOrg.website_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-purple-600 hover:underline mt-1"><ExternalLink className="w-3.5 h-3.5" />{selectedOrg.website_url}</a></div>}
+              <Separator />
+              <div>
+                <span className="text-xs font-medium text-muted-foreground uppercase mb-2 block">Branding</span>
+                {selectedOrg.logo_url ? (
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border">
+                    <Avatar className="w-14 h-14 rounded-lg border bg-white">
+                      <AvatarImage src={selectedOrg.logo_url} alt={`${selectedOrg.name} logo`} />
+                      <AvatarFallback className="rounded-lg text-base font-semibold bg-purple-100 text-purple-700">{(selectedOrg.name || '?').charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="text-xs text-muted-foreground">
+                      <p className="font-medium text-gray-700">Logo</p>
+                      <p className="truncate max-w-[280px]">{selectedOrg.logo_url}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No logo uploaded</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground"><Calendar className="w-3.5 h-3.5" /> Created {new Date(selectedOrg.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ B2B: Org Status Confirm Dialog ═══ */}
+      <Dialog open={!!confirmOrgAction} onOpenChange={(o) => { if (!o) setConfirmOrgAction(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {confirmOrgAction?.newStatus === 'suspended' ? <Shield className="w-4 h-4 text-yellow-600" /> : <CheckCircle2 className="w-4 h-4 text-green-600" />}
+              {confirmOrgAction?.newStatus === 'suspended' ? 'Suspend Organization' : confirmOrgAction?.newStatus === 'active' ? 'Reactivate Organization' : 'Disable Organization'}
+            </DialogTitle>
+          </DialogHeader>
+          {confirmOrgAction && (
+            <div className="space-y-3 pt-2">
+              <p className="text-sm text-muted-foreground">
+                {confirmOrgAction.newStatus === 'suspended'
+                  ? `Are you sure you want to suspend ${confirmOrgAction.org.name}? Members will lose access to B2B features until reactivated.`
+                  : confirmOrgAction.newStatus === 'active'
+                    ? `Are you sure you want to reactivate ${confirmOrgAction.org.name}? Members will regain access to B2B features.`
+                    : `Are you sure you want to disable ${confirmOrgAction.org.name}?`}
+              </p>
+              <DialogFooter className="gap-2 pt-2">
+                <Button variant="outline" onClick={() => setConfirmOrgAction(null)} disabled={orgStatusUpdating}>Cancel</Button>
+                <Button className={confirmOrgAction.newStatus === 'suspended' ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700'} onClick={handleOrgStatusUpdate} disabled={orgStatusUpdating}>
+                  {orgStatusUpdating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                  {confirmOrgAction.newStatus === 'suspended' ? 'Suspend' : confirmOrgAction.newStatus === 'active' ? 'Reactivate' : 'Disable'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ B2B: Review Verification Dialog ═══ */}
+      <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Shield className="w-4 h-4 text-secondary" /> {reviewingStatus === 'verified' ? 'Approve' : 'Reject'} Verification</DialogTitle></DialogHeader>
+          {reviewingVerification && (
+            <div className="space-y-3 pt-2">
+              <div className="text-sm space-y-1">
+                <p><span className="text-muted-foreground">Org:</span> {reviewingVerification.organization?.name || '—'}</p>
+                <p><span className="text-muted-foreground">Business:</span> {reviewingVerification.business_name || '—'}</p>
+                <p><span className="text-muted-foreground">Reg #:</span> {reviewingVerification.registration_number || '—'}</p>
+              </div>
+              <Separator />
+              <div><Label>Review Notes</Label><Textarea value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} placeholder="Optional notes about this decision..." rows={3} /></div>
+              <DialogFooter className="gap-2 pt-2">
+                <Button variant="outline" onClick={() => setReviewDialogOpen(false)} disabled={reviewProcessing}>Cancel</Button>
+                <Button className={reviewingStatus === 'verified' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} onClick={handleReviewVerification} disabled={reviewProcessing}>
+                  {reviewProcessing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null} {reviewingStatus === 'verified' ? 'Approve' : 'Reject'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ B2B: Plan Dialog ═══ */}
+      <Dialog open={planDialogOpen} onOpenChange={setPlanDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><CreditCard className="w-4 h-4 text-secondary" /> {editingPlan ? 'Edit Plan' : 'Create Plan'}</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Name *</Label><Input value={planForm.name} onChange={e => setPlanForm(p => ({ ...p, name: e.target.value }))} placeholder="Pro Plan" /></div>
+              <div><Label>Slug *</Label><Input value={planForm.slug} onChange={e => setPlanForm(p => ({ ...p, slug: e.target.value }))} placeholder="pro" /></div>
+            </div>
+            <div><Label>Description</Label><Input value={planForm.description} onChange={e => setPlanForm(p => ({ ...p, description: e.target.value }))} placeholder="Best for growing teams" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Monthly Price ($)</Label><Input type="number" min={0} step={0.01} value={planForm.price_monthly} onChange={e => setPlanForm(p => ({ ...p, price_monthly: parseFloat(e.target.value) || 0 }))} /></div>
+              <div><Label>Yearly Price ($)</Label><Input type="number" min={0} step={0.01} value={planForm.price_yearly} onChange={e => setPlanForm(p => ({ ...p, price_yearly: parseFloat(e.target.value) || 0 }))} /></div>
+            </div>
+            <div><Label>Features (comma-separated)</Label><Textarea value={planForm.features} onChange={e => setPlanForm(p => ({ ...p, features: e.target.value }))} placeholder="Up to 10 team members, Priority support, Custom domain" rows={2} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Sort Order</Label><Input type="number" min={0} step={1} value={planForm.sort_order} onChange={e => setPlanForm(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))} /></div>
+              <div className="flex items-end pb-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={planForm.is_active} onChange={e => setPlanForm(p => ({ ...p, is_active: e.target.checked }))} className="rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+                  <span className="text-sm font-medium">Active</span>
+                </label>
+              </div>
+            </div>
+            <DialogFooter className="pt-2 gap-2">
+              <Button variant="outline" onClick={() => setPlanDialogOpen(false)} disabled={savingPlan}>Cancel</Button>
+              <Button onClick={handleSavePlan} disabled={!planForm.name.trim() || !planForm.slug.trim() || savingPlan}>
+                {savingPlan ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null} {editingPlan ? 'Update Plan' : 'Create Plan'}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
