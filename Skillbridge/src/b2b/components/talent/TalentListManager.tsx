@@ -8,13 +8,16 @@ import { Plus, Download, Trash2, ExternalLink, X, Loader2, Users } from 'lucide-
 import {
   getTalentLists, createTalentList, deleteTalentList,
   getListTalent, removeTalentFromList,
+  B2BApiError,
   type TalentList, type SavedTalentEntry,
 } from '../../lib/api';
 import { toast } from 'sonner';
+import ErrorDisplay from '../ErrorDisplay';
 
 export default function TalentListManager() {
   const [lists, setLists] = useState<TalentList[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<B2BApiError | null>(null);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [selectedList, setSelectedList] = useState<TalentList | null>(null);
@@ -24,10 +27,15 @@ export default function TalentListManager() {
   const fetchLists = useCallback(async () => {
     try {
       setIsLoading(true);
+      setError(null);
       const result = await getTalentLists();
       setLists(result.data);
-    } catch {
-      toast.error('Failed to load talent lists');
+    } catch (err) {
+      if (err instanceof B2BApiError) {
+        setError(err);
+      } else {
+        setError(new B2BApiError('UNKNOWN', 'Failed to load talent lists'));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -125,7 +133,9 @@ export default function TalentListManager() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* List sidebar */}
         <div className="space-y-2">
-          {lists.length === 0 ? (
+          {error ? (
+            <ErrorDisplay error={error} onRetry={fetchLists} />
+          ) : lists.length === 0 ? (
             <Card>
               <CardContent className="p-6 text-center text-gray-400">
                 <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />

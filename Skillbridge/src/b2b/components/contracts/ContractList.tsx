@@ -21,14 +21,16 @@ import { toast } from 'sonner';
 import {
   getContracts, createContract, transitionContract,
   getContractMilestones, createContractMilestone, updateContractMilestone, settleContract,
-  type Contract, type ContractMilestone,
+  searchTalent, B2BApiError,
+  type Contract, type ContractMilestone, type TalentProfile,
 } from '../../lib/api';
-import { searchTalent, type TalentProfile } from '../../lib/api';
 import { CONTRACT_STATUS_COLORS, CONTRACT_TYPE_LABELS, CONTRACT_STATUS_LABELS } from '../../lib/constants';
+import ErrorDisplay from '../ErrorDisplay';
 
 export default function ContractList() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<B2BApiError | null>(null);
   const [selected, setSelected] = useState<Contract | null>(null);
   const [milestones, setMilestones] = useState<ContractMilestone[]>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -53,10 +55,15 @@ export default function ContractList() {
   const fetchContracts = useCallback(async () => {
     try {
       setIsLoading(true);
+      setError(null);
       const result = await getContracts();
       setContracts(result.data);
-    } catch {
-      toast.error('Failed to load contracts');
+    } catch (err) {
+      if (err instanceof B2BApiError) {
+        setError(err);
+      } else {
+        setError(new B2BApiError('UNKNOWN', 'Failed to load contracts'));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -255,6 +262,8 @@ export default function ContractList() {
         <div className="lg:col-span-1 space-y-2">
           {isLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+          ) : error ? (
+            <ErrorDisplay error={error} onRetry={fetchContracts} />
           ) : contracts.length === 0 ? (
             <Card>
               <CardContent className="p-6 text-center text-gray-400">

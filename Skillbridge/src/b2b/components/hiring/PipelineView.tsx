@@ -11,9 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Loader2, ExternalLink, CheckSquare, Square } from 'lucide-react';
 import {
   getPipelineApplications, updatePipelineStatus, bulkUpdatePipelineStatus,
+  B2BApiError,
   type PipelineApplication,
 } from '../../lib/api';
 import { toast } from 'sonner';
+import ErrorDisplay from '../ErrorDisplay';
 
 const PIPELINE_COLUMNS = [
   { key: 'pending', label: 'New', color: 'bg-gray-100 text-gray-700' },
@@ -121,6 +123,7 @@ function ColumnCard({ app }: { app: PipelineApplication }) {
 export default function PipelineView() {
   const [apps, setApps] = useState<PipelineApplication[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<B2BApiError | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeApp, setActiveApp] = useState<PipelineApplication | null>(null);
 
@@ -131,10 +134,15 @@ export default function PipelineView() {
   const fetchApps = useCallback(async () => {
     try {
       setIsLoading(true);
+      setError(null);
       const result = await getPipelineApplications();
       setApps(result.data);
     } catch (err) {
-      toast.error('Failed to load applications');
+      if (err instanceof B2BApiError) {
+        setError(err);
+      } else {
+        setError(new B2BApiError('UNKNOWN', 'Failed to load applications'));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -198,6 +206,14 @@ export default function PipelineView() {
 
   if (isLoading) {
     return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-purple-600" /></div>;
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-md mx-auto pt-8">
+        <ErrorDisplay error={error} onRetry={fetchApps} />
+      </div>
+    );
   }
 
   return (

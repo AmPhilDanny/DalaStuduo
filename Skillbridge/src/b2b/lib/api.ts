@@ -12,6 +12,39 @@ import type {
   OrgMemberRole,
 } from '../b2b-types';
 
+export type B2bErrorType = 'NETWORK_ERROR' | 'AUTH_ERROR' | 'SERVER_ERROR' | 'NOT_FOUND' | 'UNKNOWN';
+
+export class B2BApiError extends Error {
+  readonly type: B2bErrorType;
+  readonly status: number | null;
+
+  constructor(type: B2bErrorType, message: string, status: number | null = null) {
+    super(message);
+    this.name = 'B2BApiError';
+    this.type = type;
+    this.status = status;
+  }
+
+  get userMessage(): string {
+    switch (this.type) {
+      case 'NETWORK_ERROR':
+        return 'Unable to reach the server. Check your internet connection and try again.';
+      case 'AUTH_ERROR':
+        return 'Your session has expired. Please sign in again.';
+      case 'SERVER_ERROR':
+        return 'The server encountered an error. Please try again later.';
+      case 'NOT_FOUND':
+        return 'The requested resource was not found.';
+      default:
+        return this.message || 'An unexpected error occurred.';
+    }
+  }
+
+  get isUserError(): boolean {
+    return false;
+  }
+}
+
 const API_BASE = import.meta.env.VITE_API_URL || 'https://dalastudioshowcase.onrender.com/api';
 
 async function b2bFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -19,23 +52,40 @@ async function b2bFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const session = sessionData.session;
 
   if (!session) {
-    throw new Error('No active session');
+    throw new B2BApiError('AUTH_ERROR', 'No active session');
   }
 
-  const url = `${API_BASE}${path}`;
-  const res = await fetch(url, {
-    method: options?.method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
-      ...(options?.headers as Record<string, string>),
-    },
-    body: options?.body || undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: options?.method || 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        ...(options?.headers as Record<string, string>),
+      },
+      body: options?.body || undefined,
+    });
+  } catch {
+    throw new B2BApiError('NETWORK_ERROR', 'Failed to connect to the server');
+  }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(body.error || `HTTP ${res.status}`);
+    switch (res.status) {
+      case 401:
+      case 403:
+        throw new B2BApiError('AUTH_ERROR', `Access denied (${res.status})`, res.status);
+      case 404:
+        throw new B2BApiError('NOT_FOUND', 'Resource not found', res.status);
+      case 500:
+      case 502:
+      case 503:
+        throw new B2BApiError('SERVER_ERROR', `Server error (${res.status})`, res.status);
+      default: {
+        const body = await res.json().catch(() => ({ error: res.statusText }));
+        throw new B2BApiError('SERVER_ERROR', body.error || `Request failed (${res.status})`, res.status);
+      }
+    }
   }
 
   return res.json();
