@@ -39,7 +39,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, Building2, Banknote, Image as ImageIcon, ChevronLeft, ChevronRight, Bell, LogOut, LayoutDashboard } from 'lucide-react';
+import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, Building2, Banknote, Image as ImageIcon, ChevronLeft, ChevronRight, Bell, LogOut, LayoutDashboard, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
@@ -629,6 +629,10 @@ export default function AdminDashboard() {
   const showDisputeBadge = disputedOrders.length > 0;
   const showManualBadge = pendingManualCount > 0;
 
+  const B2B_NAV_ITEMS: { value: string; label: string; icon: React.ReactNode }[] = [
+    { value: 'organizations', label: 'Organizations', icon: <Building2 className="w-4 h-4" /> },
+  ];
+
   return (
     <div className="flex bg-gray-50 dark:bg-background pt-16 min-h-[calc(100vh-4rem)]">
 
@@ -645,7 +649,7 @@ export default function AdminDashboard() {
             {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
         </div>
-        <nav className="flex-1 py-4 space-y-1 px-2 overflow-y-auto">
+        <div className="flex-1 py-4 space-y-1 px-2 overflow-y-auto">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.value}
@@ -669,7 +673,32 @@ export default function AdminDashboard() {
               )}
             </button>
           ))}
-        </nav>
+
+          {/* B2B section divider */}
+          {sidebarOpen && (
+            <div className="pt-4 pb-1">
+              <div className="flex items-center gap-2 px-3">
+                <div className="flex-1 h-px bg-gray-700/50" />
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">B2B</span>
+                <div className="flex-1 h-px bg-gray-700/50" />
+              </div>
+            </div>
+          )}
+          {B2B_NAV_ITEMS.map((item) => (
+            <button
+              key={item.value}
+              onClick={() => setActiveTab(item.value)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                activeTab === item.value
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              {item.icon}
+              {sidebarOpen && <span className="truncate">{item.label}</span>}
+            </button>
+          ))}
+        </div>
       </aside>
 
       {/* Main Content */}
@@ -1161,6 +1190,27 @@ export default function AdminDashboard() {
 
           {/* ═══ SITE SETTINGS ═══ */}
           {activeTab === 'site-settings' && <SiteSettingsTab />}
+
+          {/* ═══ ORGANIZATIONS ═══ */}
+          {activeTab === 'organizations' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-secondary" />
+                  Organization Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <Building2 className="w-12 h-12 text-gray-300 mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">Coming Soon</h3>
+                  <p className="text-sm text-muted-foreground max-w-md">
+                    Manage organizations — view details, verify businesses, and oversee subscription plans.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
         
         {/* Footer */}
