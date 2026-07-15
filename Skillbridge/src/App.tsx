@@ -32,6 +32,7 @@ import DisputeDetail from "@/pages/DisputeDetail";
 import Connections from "@/pages/Connections";
 import OrgSetup from "@/b2b/pages/OrgSetup";
 import InviteAccept from "@/b2b/pages/InviteAccept";
+import OrgSubnav from "@/b2b/components/layout/OrgSubnav";
 import TeamList from "@/b2b/components/team/TeamList";
 import TalentSearch from "@/b2b/components/talent/TalentSearch";
 import TalentListManager from "@/b2b/components/talent/TalentListManager";
@@ -124,7 +125,8 @@ function App() {
               <Route path="/b2b/dashboard" element={<Navigate to="/dashboard" replace />} />
               <Route path="/b2b" element={
                 <OrgProvider>
-                  <div className="pt-24 pb-12 px-4 lg:px-8">
+                  <OrgSubnav />
+                  <div className="pt-8 pb-12 px-4 lg:px-8">
                     <div className="mx-auto max-w-6xl">
                       <Outlet />
                     </div>
