@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useOrg } from '../../hooks/useOrg';
 import { useSubscription } from '../../hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
+import { usePermissions } from '@/hooks/usePermissions';
 import { getMyMemberships, switchOrg } from '../../lib/api';
 import type { OrgMembership } from '../../lib/api';
 
@@ -21,12 +22,19 @@ export default function B2BLayout() {
   const { org, role, isLoading } = useOrg();
   const { plan } = useSubscription();
   const { profile } = useAuth();
+  const { hasPermission, loading: permLoading } = usePermissions();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [memberships, setMemberships] = useState<OrgMembership[]>([]);
   const [showOrgSwitcher, setShowOrgSwitcher] = useState(false);
   const [switching, setSwitching] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!permLoading && !hasPermission('access_b2b') && profile?.role !== 'firm') {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [permLoading, hasPermission, navigate, profile?.role]);
 
   useEffect(() => {
     getMyMemberships()

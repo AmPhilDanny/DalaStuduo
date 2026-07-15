@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { HashRouter as Router, Routes, Route } from "react-router-dom";
+import { HashRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Toaster } from "@/components/ui/sonner";
@@ -17,7 +17,6 @@ import MyApplications from "@/pages/MyApplications";
 import Tutor from "@/pages/Tutor";
 import TutorChat from "@/pages/TutorChat";
 import UserDashboard from "@/pages/UserDashboard";
-import OrgDashboard from "@/pages/OrgDashboard";
 import PostJob from "@/pages/PostJob";
 import Marketplace from "@/pages/Marketplace";
 import MarketplaceDetail from "@/pages/MarketplaceDetail";
@@ -109,7 +108,7 @@ function App() {
               <Route path="/tutor" element={<Tutor />} />
               <Route path="/tutor/:id" element={<TutorChat />} />
               <Route path="/dashboard" element={<UserDashboard />} />
-              <Route path="/dashboard/org" element={<OrgDashboard />} />
+              <Route path="/dashboard/org" element={<Navigate to="/b2b/dashboard" replace />} />
               <Route path="/jobs/new" element={<PostJob />} />
               <Route path="/marketplace" element={<Marketplace />} />
               <Route path="/marketplace/new" element={<CreateListing />} />
