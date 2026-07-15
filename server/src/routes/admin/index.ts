@@ -625,3 +625,112 @@ adminRouter.delete('/roles/:id', async (req: Request, res: Response) => {
   if (error) throw new AppError(500, error.message);
   res.json({ data });
 });
+
+// ════════════════════════════════════════
+// VERIFICATIONS (B2B)
+// ════════════════════════════════════════
+
+// ── GET /admin/verifications ──
+// Returns all org verification submissions across all orgs, enriched with org name
+adminRouter.get('/verifications', async (req: Request, res: Response) => {
+  const status = req.query.status as string | undefined;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  try {
+    let query = adminClient
+      .from('org_verifications')
+      .select('*', { count: 'exact' });
+
+    if (status) query = query.eq('status', status);
+
+    const { data: verifications, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      // If table doesn't exist, return empty
+      if (error.code === '42P01') {
+        return res.json({ data: [], count: 0, limit, offset });
+      }
+      throw new AppError(500, error.message);
+    }
+
+    // Enrich with org names
+    const orgIds = [...new Set((verifications || []).map((v: any) => v.org_id))];
+    let orgMap = new Map<string, { name: string; slug: string }>();
+
+    if (orgIds.length > 0) {
+      const { data: orgs } = await adminClient
+        .from('organizations')
+        .select('id, name, slug')
+        .in('id', orgIds);
+      if (orgs) {
+        orgMap = new Map(orgs.map((o: any) => [o.id, { name: o.name, slug: o.slug }]));
+      }
+    }
+
+    const data = (verifications || []).map((v: any) => ({
+      ...v,
+      organization: orgMap.get(v.org_id) || null,
+    }));
+
+    res.json({ data, count, limit, offset });
+  } catch (err) {
+    // If table doesn't exist at all, return empty
+    if (err instanceof AppError) throw err;
+    res.json({ data: [], count: 0, limit, offset });
+  }
+});
+
+// ── PATCH /admin/verifications/:id/review ──
+// Review (approve/reject) an org verification submission
+adminRouter.patch('/verifications/:id/review',
+  validate(z.object({
+    status: z.enum(['verified', 'rejected']),
+    notes: z.string().optional(),
+  })),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { status, notes } = req.body;
+
+    const { data: existing, error: fetchError } = await adminClient
+      .from('org_verifications')
+      .select('id, org_id, status')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      if (fetchError.code === '42P01') throw new AppError(404, 'Verifications table does not exist');
+      if (fetchError.code === 'PGRST116') throw new AppError(404, 'Verification not found');
+      throw new AppError(500, fetchError.message);
+    }
+
+    if (existing.status === 'verified') throw new AppError(400, 'Verification is already verified');
+    if (existing.status === 'rejected') throw new AppError(400, 'Verification is already rejected');
+
+    const { data, error } = await adminClient
+      .from('org_verifications')
+      .update({
+        status,
+        reviewed_by: req.user?.id || null,
+        reviewed_at: new Date().toISOString(),
+        notes: notes || null,
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw new AppError(500, error.message);
+
+    // If verified, also update the org status
+    if (status === 'verified') {
+      await adminClient
+        .from('organizations')
+        .update({ status: 'active' })
+        .eq('id', existing.org_id);
+    }
+
+    res.json({ data });
+  }
+);
