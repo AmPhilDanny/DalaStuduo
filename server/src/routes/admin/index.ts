@@ -507,7 +507,7 @@ adminRouter.get('/orgs', async (req: Request, res: Response) => {
 
   let query = adminClient
     .from('organizations')
-    .select('id, name, slug, industry, size, description, website_url, subscription_plan_id, subscription_starts_at, created_at, updated_at', { count: 'exact' });
+    .select('id, name, slug, industry, size, description, website_url, logo_url, subscription_plan_id, subscription_starts_at, created_at, updated_at, status', { count: 'exact' });
 
   if (search) query = query.ilike('name', `%${search}%`);
 
@@ -554,6 +554,43 @@ adminRouter.get('/orgs', async (req: Request, res: Response) => {
 
   res.json({ data, count, limit, offset });
 });
+
+// ── PATCH /admin/orgs/:id/status — Suspend / Reactivate / Disable ──
+adminRouter.patch('/orgs/:id/status',
+  validate(z.object({
+    status: z.enum(['active', 'suspended', 'disabled']),
+  })),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const { data: org, error: fetchError } = await adminClient
+      .from('organizations')
+      .select('id, name, status')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !org) throw new AppError(404, 'Organization not found');
+    if (org.status === status) throw new AppError(400, `Organization is already ${status}`);
+
+    const { error: updateError } = await adminClient
+      .from('organizations')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (updateError) throw new AppError(500, updateError.message);
+
+    await adminClient.from('audit_log').insert({
+      admin_id: req.user!.id,
+      action: 'update_org_status',
+      entity_type: 'organizations',
+      entity_id: id,
+      details: { from: org.status, to: status },
+    });
+
+    res.json({ data: { id, name: org.name, previous_status: org.status, status } });
+  }
+);
 
 // ── GET /admin/roles ──
 adminRouter.get('/roles', async (_req: Request, res: Response) => {
@@ -891,4 +928,288 @@ adminRouter.get('/contracts', async (req: Request, res: Response) => {
   }));
 
   res.json({ data, count, limit, offset });
+});
+
+// ════════════════════════════════════════
+// BILLING — INVOICES & HISTORY (CROSS-ORG)
+// ════════════════════════════════════════
+
+adminRouter.get('/billing/invoices', async (req: Request, res: Response) => {
+  const status = req.query.status as string | undefined;
+  const search = req.query.search as string | undefined;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  try {
+    let query = adminClient
+      .from('billing_invoices')
+      .select('*', { count: 'exact' });
+
+    if (status) query = query.eq('status', status);
+    if (search) query = query.or(`invoice_number.ilike.%${search}%,org_id.ilike.%${search}%`);
+
+    const { data: invoices, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      // Table might not exist yet
+      if (error.code === '42P01') {
+        return res.json({ data: [], count: 0, limit, offset });
+      }
+      throw new AppError(500, error.message);
+    }
+
+    // Enrich with org names and plan names
+    const orgIds = [...new Set((invoices || []).map((inv: any) => inv.org_id))];
+    const planIds = [...new Set((invoices || []).map((inv: any) => inv.plan_id).filter(Boolean))];
+
+    const [orgResult, planResult] = await Promise.all([
+      orgIds.length > 0
+        ? adminClient.from('organizations').select('id, name, slug').in('id', orgIds)
+        : Promise.resolve({ data: [] }),
+      planIds.length > 0
+        ? adminClient.from('subscription_plans').select('id, name, slug').in('id', planIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const orgMap = new Map((orgResult.data || []).map((o: any) => [o.id, { name: o.name, slug: o.slug }]));
+    const planMap = new Map((planResult.data || []).map((p: any) => [p.id, { name: p.name, slug: p.slug }]));
+
+    const data = (invoices || []).map((inv: any) => ({
+      ...inv,
+      organization: orgMap.get(inv.org_id) || null,
+      plan: planMap.get(inv.plan_id) || null,
+    }));
+
+    res.json({ data, count, limit, offset });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    res.json({ data: [], count: 0, limit, offset });
+  }
+});
+
+adminRouter.get('/billing/history', async (req: Request, res: Response) => {
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  try {
+    let query = adminClient
+      .from('billing_history')
+      .select('*', { count: 'exact' });
+
+    const { data: history, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      if (error.code === '42P01') {
+        return res.json({ data: [], count: 0, limit, offset });
+      }
+      throw new AppError(500, error.message);
+    }
+
+    // Enrich with org names, plan names, and changer info
+    const orgIds = [...new Set((history || []).map((h: any) => h.org_id))];
+    const planIds = [...new Set([...(history || []).map((h: any) => h.from_plan_id), ...(history || []).map((h: any) => h.to_plan_id)].filter(Boolean))];
+    const userIds = [...new Set((history || []).map((h: any) => h.changed_by).filter(Boolean))];
+
+    const [orgResult, planResult, userResult] = await Promise.all([
+      orgIds.length > 0
+        ? adminClient.from('organizations').select('id, name, slug').in('id', orgIds)
+        : Promise.resolve({ data: [] }),
+      planIds.length > 0
+        ? adminClient.from('subscription_plans').select('id, name, slug').in('id', planIds)
+        : Promise.resolve({ data: [] }),
+      userIds.length > 0
+        ? adminClient.from('profiles').select('id, full_name, avatar_url').in('id', userIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const orgMap = new Map((orgResult.data || []).map((o: any) => [o.id, { name: o.name, slug: o.slug }]));
+    const planMap = new Map((planResult.data || []).map((p: any) => [p.id, { name: p.name, slug: p.slug }]));
+    const userMap = new Map((userResult.data || []).map((u: any) => [u.id, { full_name: u.full_name, avatar_url: u.avatar_url }]));
+
+    const data = (history || []).map((h: any) => ({
+      ...h,
+      organization: orgMap.get(h.org_id) || null,
+      from_plan: planMap.get(h.from_plan_id) || null,
+      to_plan: planMap.get(h.to_plan_id) || null,
+      changed_by_user: userMap.get(h.changed_by) || null,
+    }));
+
+    res.json({ data, count, limit, offset });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    res.json({ data: [], count: 0, limit, offset });
+  }
+});
+
+// ════════════════════════════════════════
+// COMPLIANCE REPORTS (CROSS-ORG)
+// ════════════════════════════════════════
+
+adminRouter.get('/compliance/reports', async (req: Request, res: Response) => {
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  try {
+    let query = adminClient
+      .from('compliance_reports')
+      .select('*', { count: 'exact' });
+
+    const { data: reports, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      if (error.code === '42P01') {
+        return res.json({ data: [], count: 0, limit, offset });
+      }
+      throw new AppError(500, error.message);
+    }
+
+    // Enrich with org names
+    const orgIds = [...new Set((reports || []).map((r: any) => r.org_id))];
+    let orgMap = new Map<string, { name: string; slug: string }>();
+
+    if (orgIds.length > 0) {
+      const { data: orgs } = await adminClient
+        .from('organizations')
+        .select('id, name, slug')
+        .in('id', orgIds);
+      if (orgs) {
+        orgMap = new Map(orgs.map((o: any) => [o.id, { name: o.name, slug: o.slug }]));
+      }
+    }
+
+    const data = (reports || []).map((r: any) => ({
+      ...r,
+      organization: orgMap.get(r.org_id) || null,
+    }));
+
+    res.json({ data, count, limit, offset });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    res.json({ data: [], count: 0, limit, offset });
+  }
+});
+
+// ════════════════════════════════════════
+// HIRING — CROSS-ORG JOB POSTS & APPLICATIONS
+// ════════════════════════════════════════
+
+adminRouter.get('/jobs', async (req: Request, res: Response) => {
+  const search = req.query.search as string | undefined;
+  const type = req.query.type as string | undefined;
+  const status = req.query.status as string | undefined;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  try {
+    let query = adminClient
+      .from('jobs')
+      .select('*', { count: 'exact' });
+
+    if (search) query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+    if (type && type !== 'all') query = query.eq('type', type);
+    if (status === 'active') query = query.eq('is_active', true);
+    else if (status === 'inactive') query = query.eq('is_active', false);
+
+    const { data: jobs, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      if (error.code === '42P01') {
+        return res.json({ data: [], count: 0, limit, offset });
+      }
+      throw new AppError(500, error.message);
+    }
+
+    const orgIds = [...new Set((jobs || []).map((j: any) => j.org_id).filter(Boolean))];
+    const companyIds = [...new Set((jobs || []).map((j: any) => j.company_id).filter(Boolean))];
+
+    const [orgResult, companyResult] = await Promise.all([
+      orgIds.length > 0
+        ? adminClient.from('organizations').select('id, name, slug').in('id', orgIds)
+        : Promise.resolve({ data: [] }),
+      companyIds.length > 0
+        ? adminClient.from('profiles').select('id, full_name, company_name, avatar_url').in('id', companyIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const orgMap = new Map((orgResult.data || []).map((o: any) => [o.id, { name: o.name, slug: o.slug }]));
+    const companyMap = new Map((companyResult.data || []).map((p: any) => [p.id, { full_name: p.full_name, company_name: p.company_name, avatar_url: p.avatar_url }]));
+
+    const data = (jobs || []).map((j: any) => ({
+      ...j,
+      organization: orgMap.get(j.org_id) || null,
+      company: companyMap.get(j.company_id) || null,
+    }));
+
+    res.json({ data, count, limit, offset });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    res.json({ data: [], count: 0, limit, offset });
+  }
+});
+
+adminRouter.get('/applications', async (req: Request, res: Response) => {
+  const status = req.query.status as string | undefined;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  try {
+    let query = adminClient
+      .from('applications')
+      .select('*', { count: 'exact' });
+
+    if (status) query = query.eq('status', status);
+
+    const { data: applications, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      if (error.code === '42P01') {
+        return res.json({ data: [], count: 0, limit, offset });
+      }
+      throw new AppError(500, error.message);
+    }
+
+    const jobIds = [...new Set((applications || []).map((a: any) => a.job_id).filter(Boolean))];
+    const studentIds = [...new Set((applications || []).map((a: any) => a.student_id).filter(Boolean))];
+
+    const [jobResult, studentResult] = await Promise.all([
+      jobIds.length > 0
+        ? adminClient.from('jobs').select('id, title, type, company_id, org_id, is_active').in('id', jobIds)
+        : Promise.resolve({ data: [] }),
+      studentIds.length > 0
+        ? adminClient.from('profiles').select('id, full_name, avatar_url').in('id', studentIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const jobs = jobResult.data || [];
+    const orgIds = [...new Set(jobs.map((j: any) => j.org_id).filter(Boolean))];
+
+    const { data: orgs } = orgIds.length > 0
+      ? await adminClient.from('organizations').select('id, name, slug').in('id', orgIds)
+      : { data: [] };
+
+    const orgMap = new Map((orgs || []).map((o: any) => [o.id, { name: o.name, slug: o.slug }]));
+    const jobMap = new Map(jobs.map((j: any) => [j.id, { ...j, organization: orgMap.get(j.org_id) || null }]));
+    const studentMap = new Map((studentResult.data || []).map((s: any) => [s.id, { full_name: s.full_name, avatar_url: s.avatar_url }]));
+
+    const data = (applications || []).map((a: any) => ({
+      ...a,
+      job: jobMap.get(a.job_id) || null,
+      student: studentMap.get(a.student_id) || null,
+    }));
+
+    res.json({ data, count, limit, offset });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    res.json({ data: [], count: 0, limit, offset });
+  }
 });
