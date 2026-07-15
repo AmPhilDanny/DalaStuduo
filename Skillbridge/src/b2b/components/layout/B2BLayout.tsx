@@ -61,9 +61,9 @@ export default function B2BLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 flex pt-16">
       {/* Sidebar */}
-      <aside className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-16'}`}>
+      <aside className={`fixed left-0 top-16 h-[calc(100vh-64px)] bg-white border-r border-gray-200 flex flex-col transition-all duration-300 z-40 ${sidebarOpen ? 'w-64' : 'w-16'}`}>
         {/* Org header */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
@@ -172,7 +172,7 @@ export default function B2BLayout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-16'}`}>
         <div className="flex-1 p-6 lg:p-8">
           <Outlet />
         </div>
