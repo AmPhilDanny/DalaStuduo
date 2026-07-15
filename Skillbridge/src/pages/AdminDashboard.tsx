@@ -32,6 +32,13 @@ import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -39,7 +46,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, Building2, Banknote, Image as ImageIcon, ChevronLeft, ChevronRight, Bell, LogOut, LayoutDashboard, Briefcase } from 'lucide-react';
+import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, Building2, Banknote, Image as ImageIcon, ChevronLeft, ChevronRight, Bell, LogOut, LayoutDashboard, Briefcase, ExternalLink, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
@@ -122,6 +129,7 @@ export default function AdminDashboard() {
   const [orgs, setOrgs] = useState<any[]>([]);
   const [orgsLoading, setOrgsLoading] = useState(false);
   const [orgSearch, setOrgSearch] = useState('');
+  const [selectedOrg, setSelectedOrg] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [orderStatus, setOrderStatus] = useState('');
@@ -1273,8 +1281,8 @@ export default function AdminDashboard() {
                     </TableHeader>
                     <TableBody>
                       {orgs.map((org: any) => (
-                        <TableRow key={org.id}>
-                          <TableCell className="font-medium">{org.name}</TableCell>
+                        <TableRow key={org.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedOrg(org)}>
+                          <TableCell className="font-medium text-purple-600 hover:underline">{org.name}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{org.industry || '—'}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{org.size || '—'}</TableCell>
                           <TableCell>
@@ -1296,6 +1304,106 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           )}
+
+          {/* ═══ ORG DETAIL SHEET ═══ */}
+          <Sheet open={!!selectedOrg} onOpenChange={(open) => { if (!open) setSelectedOrg(null); }}>
+            <SheetContent className="sm:max-w-md w-full overflow-y-auto">
+              <SheetHeader className="pb-4 border-b">
+                <SheetTitle className="flex items-center gap-2 text-lg">
+                  <Building2 className="w-5 h-5 text-secondary" />
+                  {selectedOrg?.name || 'Organization'}
+                </SheetTitle>
+                <SheetDescription>
+                  {selectedOrg?.slug && <span className="text-xs font-mono">/{selectedOrg.slug}</span>}
+                </SheetDescription>
+              </SheetHeader>
+
+              {selectedOrg && (
+                <div className="flex flex-col gap-5 py-4">
+                  {/* Status badge */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">Status</span>
+                    <Badge variant={selectedOrg.status === 'active' ? 'default' : 'secondary'}>
+                      {selectedOrg.status || 'active'}
+                    </Badge>
+                  </div>
+
+                  {/* Industry & Size */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Industry</span>
+                      <p className="text-sm font-medium mt-1">{selectedOrg.industry || '—'}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Size</span>
+                      <p className="text-sm font-medium mt-1">{selectedOrg.size || '—'}</p>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  {selectedOrg.description && (
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Description</span>
+                      <p className="text-sm mt-1 text-gray-700 leading-relaxed">{selectedOrg.description}</p>
+                    </div>
+                  )}
+
+                  <Separator />
+
+                  {/* Plan & Members */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Plan</span>
+                      <div className="mt-1">
+                        <Badge variant={selectedOrg.plan ? 'default' : 'outline'}>
+                          {selectedOrg.plan?.name || 'Free'}
+                        </Badge>
+                      </div>
+                      {selectedOrg.plan && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {selectedOrg.plan.interval === 'month' ? 'Monthly' : 'Yearly'} · ${Number(selectedOrg.plan.price).toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Members</span>
+                      <p className="text-lg font-semibold mt-1">{selectedOrg.member_count ?? 0}</p>
+                    </div>
+                  </div>
+
+                  {/* Subscription Status */}
+                  {selectedOrg.subscription_status && (
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Subscription</span>
+                      <Badge className="mt-1" variant={selectedOrg.subscription_status === 'active' ? 'default' : 'secondary'}>
+                        {selectedOrg.subscription_status}
+                      </Badge>
+                    </div>
+                  )}
+
+                  <Separator />
+
+                  {/* Website */}
+                  {selectedOrg.website_url && (
+                    <div>
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Website</span>
+                      <a href={selectedOrg.website_url} target="_blank" rel="noopener noreferrer"
+                         className="flex items-center gap-1.5 text-sm text-purple-600 hover:underline mt-1">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        {selectedOrg.website_url}
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Created */}
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar className="w-3.5 h-3.5" />
+                    Created {new Date(selectedOrg.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  </div>
+                </div>
+              )}
+            </SheetContent>
+          </Sheet>
         </div>
         
         {/* Footer */}
