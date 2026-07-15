@@ -734,3 +734,118 @@ adminRouter.patch('/verifications/:id/review',
     res.json({ data });
   }
 );
+
+// ════════════════════════════════════════
+// BILLING — SUBSCRIPTION PLANS
+// ════════════════════════════════════════
+
+const planCreateSchema = z.object({
+  name: z.string().min(1).max(200),
+  slug: z.string().min(1).max(100),
+  description: z.string().optional().default(''),
+  price_monthly: z.number().min(0),
+  price_yearly: z.number().min(0),
+  features: z.array(z.string()).optional().default([]),
+  is_active: z.boolean().optional().default(true),
+  sort_order: z.number().int().min(0).optional().default(0),
+});
+
+const planUpdateSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  slug: z.string().min(1).max(100).optional(),
+  description: z.string().optional(),
+  price_monthly: z.number().min(0).optional(),
+  price_yearly: z.number().min(0).optional(),
+  features: z.array(z.string()).optional(),
+  is_active: z.boolean().optional(),
+  sort_order: z.number().int().min(0).optional(),
+});
+
+adminRouter.get('/billing/plans', async (_req: Request, res: Response) => {
+  const { data, error } = await adminClient
+    .from('subscription_plans')
+    .select('*')
+    .order('sort_order')
+    .order('name');
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+adminRouter.post('/billing/plans',
+  validate(planCreateSchema),
+  async (req: Request, res: Response) => {
+    const { data, error } = await adminClient
+      .from('subscription_plans')
+      .insert({
+        name: req.body.name,
+        slug: req.body.slug,
+        description: req.body.description || null,
+        price_monthly: req.body.price_monthly,
+        price_yearly: req.body.price_yearly,
+        features: req.body.features || [],
+        is_active: req.body.is_active ?? true,
+        sort_order: req.body.sort_order ?? 0,
+      })
+      .select()
+      .single();
+    if (error) {
+      if (error.code === '23505') throw new AppError(409, `Plan slug "${req.body.slug}" already exists`);
+      throw new AppError(500, error.message);
+    }
+    res.status(201).json({ data });
+  }
+);
+
+adminRouter.patch('/billing/plans/:id',
+  validate(planUpdateSchema),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const updates: Record<string, unknown> = {};
+    for (const f of ['name', 'slug', 'description', 'price_monthly', 'price_yearly', 'features', 'is_active', 'sort_order'] as const) {
+      if (req.body[f] !== undefined) updates[f] = req.body[f];
+    }
+    if (Object.keys(updates).length === 0) throw new AppError(400, 'No valid fields to update');
+    const { data, error } = await adminClient
+      .from('subscription_plans')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) {
+      if (error.code === '23505') throw new AppError(409, `Plan slug "${req.body.slug}" already exists`);
+      if (error.code === 'PGRST116') throw new AppError(404, 'Plan not found');
+      throw new AppError(500, error.message);
+    }
+    res.json({ data });
+  }
+);
+
+adminRouter.delete('/billing/plans/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { data: orgsUsingPlan } = await adminClient
+    .from('organizations')
+    .select('id')
+    .eq('subscription_plan_id', id)
+    .limit(1);
+  if (orgsUsingPlan && orgsUsingPlan.length > 0) {
+    const { data, error } = await adminClient
+      .from('subscription_plans')
+      .update({ is_active: false })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new AppError(500, error.message);
+    return res.json({ data, notice: 'Plan is in use — deactivated instead of deleted' });
+  }
+  const { data, error } = await adminClient
+    .from('subscription_plans')
+    .delete()
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) {
+    if (error.code === 'PGRST116') throw new AppError(404, 'Plan not found');
+    throw new AppError(500, error.message);
+  }
+  res.json({ data });
+});
