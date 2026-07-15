@@ -50,7 +50,7 @@ import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, Refresh
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
-import { get } from '@/lib/api-client';
+import { get, patch } from '@/lib/api-client';
 import { downloadCSV } from '@/lib/export';
 import SiteSettingsTab from '@/components/admin/SiteSettingsTab';
 import UserManagementTab from '@/components/admin/UserManagementTab';
@@ -130,6 +130,17 @@ export default function AdminDashboard() {
   const [orgsLoading, setOrgsLoading] = useState(false);
   const [orgSearch, setOrgSearch] = useState('');
   const [selectedOrg, setSelectedOrg] = useState<any | null>(null);
+
+  // Verifications
+  const [verifications, setVerifications] = useState<any[]>([]);
+  const [verificationsLoading, setVerificationsLoading] = useState(false);
+  const [verifStatusFilter, setVerifStatusFilter] = useState('pending');
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewingVerification, setReviewingVerification] = useState<any | null>(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [reviewingStatus, setReviewingStatus] = useState<'verified' | 'rejected' | null>(null);
+  const [reviewProcessing, setReviewProcessing] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [orderStatus, setOrderStatus] = useState('');
@@ -274,6 +285,48 @@ export default function AdminDashboard() {
       fetchOrgs();
     }
   }, [user, isAdminAccess, fetchOrgs]);
+
+  const fetchVerifications = useCallback(async () => {
+    setVerificationsLoading(true);
+    try {
+      const result = await get<any[]>('/admin/verifications', {
+        status: verifStatusFilter || undefined,
+        limit: 100,
+      });
+      setVerifications(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load verifications');
+    } finally {
+      setVerificationsLoading(false);
+    }
+  }, [verifStatusFilter]);
+
+  useEffect(() => {
+    if (user && isAdminAccess) {
+      fetchVerifications();
+    }
+  }, [user, isAdminAccess, fetchVerifications]);
+
+  const handleReviewVerification = async () => {
+    if (!reviewingVerification || !reviewingStatus) return;
+    setReviewProcessing(true);
+    try {
+      await patch(`/admin/verifications/${reviewingVerification.id}/review`, {
+        status: reviewingStatus,
+        notes: reviewNotes || undefined,
+      });
+      toast.success(`Verification ${reviewingStatus}`);
+      setReviewDialogOpen(false);
+      setReviewingVerification(null);
+      setReviewNotes('');
+      setReviewingStatus(null);
+      fetchVerifications();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to review verification');
+    } finally {
+      setReviewProcessing(false);
+    }
+  };
 
   const saveService = async () => {
     if (!editingService) return;
@@ -661,6 +714,7 @@ export default function AdminDashboard() {
 
   const B2B_NAV_ITEMS: { value: string; label: string; icon: React.ReactNode }[] = [
     { value: 'organizations', label: 'Organizations', icon: <Building2 className="w-4 h-4" /> },
+    { value: 'verifications', label: 'Verifications', icon: <Shield className="w-4 h-4" /> },
   ];
 
   return (
@@ -1305,6 +1359,105 @@ export default function AdminDashboard() {
             </Card>
           )}
 
+          {/* ═══ VERIFICATIONS ═══ */}
+          {activeTab === 'verifications' && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-secondary" />
+                    Org Verification Queue
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    {['pending', 'verified', 'rejected'].map(s => (
+                      <Button key={s} size="sm" variant={verifStatusFilter === s ? 'default' : 'outline'}
+                        className={verifStatusFilter === s ? '' : 'text-muted-foreground'}
+                        onClick={() => setVerifStatusFilter(s)}>
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {verificationsLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                ) : verifications.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <Shield className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">No {verifStatusFilter} verifications</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">
+                      {verifStatusFilter === 'pending' ? 'No organizations have submitted verification requests yet.' : ''}
+                      {verifStatusFilter === 'verified' ? 'No verified submissions match this filter.' : ''}
+                      {verifStatusFilter === 'rejected' ? 'No rejected submissions match this filter.' : ''}
+                    </p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Organization</TableHead>
+                        <TableHead>Business Name</TableHead>
+                        <TableHead>Reg Number</TableHead>
+                        <TableHead>Tax ID</TableHead>
+                        <TableHead>Documents</TableHead>
+                        <TableHead>Submitted</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {verifications.map((v: any) => (
+                        <TableRow key={v.id}>
+                          <TableCell className="font-medium">{v.organization?.name || v.org_id?.slice(0, 8) || '—'}</TableCell>
+                          <TableCell className="text-sm">{v.business_name || '—'}</TableCell>
+                          <TableCell className="text-sm font-mono">{v.registration_number || '—'}</TableCell>
+                          <TableCell className="text-sm font-mono">{v.tax_id || '—'}</TableCell>
+                          <TableCell>
+                            {v.document_urls?.length > 0 ? (
+                              <div className="flex gap-1">
+                                {v.document_urls.map((url: string, i: number) => (
+                                  <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                    className="text-xs text-purple-600 hover:underline flex items-center gap-0.5">
+                                    <FileText className="w-3 h-3" /> Doc {i + 1}
+                                  </a>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {new Date(v.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {v.status === 'pending' && (
+                              <div className="flex items-center justify-end gap-1">
+                                <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-700"
+                                  onClick={() => { setReviewingVerification(v); setReviewingStatus('verified'); setReviewDialogOpen(true); }}>
+                                  <CheckCircle2 className="w-3 h-3 mr-0.5" /> Approve
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 text-xs text-red-600"
+                                  onClick={() => { setReviewingVerification(v); setReviewingStatus('rejected'); setReviewDialogOpen(true); }}>
+                                  <XCircle className="w-3 h-3 mr-0.5" /> Reject
+                                </Button>
+                              </div>
+                            )}
+                            {v.status === 'verified' && (
+                              <Badge variant="default" className="text-xs bg-green-100 text-green-800 border-green-200">Verified</Badge>
+                            )}
+                            {v.status === 'rejected' && (
+                              <Badge variant="outline" className="text-xs text-red-600 border-red-200">Rejected</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* ═══ ORG DETAIL SHEET ═══ */}
           <Sheet open={!!selectedOrg} onOpenChange={(open) => { if (!open) setSelectedOrg(null); }}>
             <SheetContent className="sm:max-w-md w-full overflow-y-auto">
@@ -1404,6 +1557,50 @@ export default function AdminDashboard() {
               )}
             </SheetContent>
           </Sheet>
+
+          {/* ═══ REVIEW VERIFICATION DIALOG ═══ */}
+          <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-secondary" />
+                  {reviewingStatus === 'verified' ? 'Approve' : 'Reject'} Verification
+                </DialogTitle>
+              </DialogHeader>
+              {reviewingVerification && (
+                <div className="space-y-3 pt-2">
+                  <div className="text-sm space-y-1">
+                    <p><span className="text-muted-foreground">Org:</span> {reviewingVerification.organization?.name || '—'}</p>
+                    <p><span className="text-muted-foreground">Business:</span> {reviewingVerification.business_name || '—'}</p>
+                    <p><span className="text-muted-foreground">Reg #:</span> {reviewingVerification.registration_number || '—'}</p>
+                  </div>
+                  <Separator />
+                  <div>
+                    <Label>Review Notes</Label>
+                    <Textarea
+                      value={reviewNotes}
+                      onChange={(e) => setReviewNotes(e.target.value)}
+                      placeholder="Optional notes about this decision..."
+                      rows={3}
+                    />
+                  </div>
+                  <DialogFooter className="gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setReviewDialogOpen(false)} disabled={reviewProcessing}>
+                      Cancel
+                    </Button>
+                    <Button
+                      className={reviewingStatus === 'verified' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
+                      onClick={handleReviewVerification}
+                      disabled={reviewProcessing}
+                    >
+                      {reviewProcessing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                      {reviewingStatus === 'verified' ? 'Approve' : 'Reject'}
+                    </Button>
+                  </DialogFooter>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
         
         {/* Footer */}
