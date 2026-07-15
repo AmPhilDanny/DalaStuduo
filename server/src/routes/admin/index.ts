@@ -496,8 +496,64 @@ adminRouter.patch('/config',
 );
 
 // ════════════════════════════════════════
-// ROLE MANAGEMENT
+// ORGANIZATIONS (B2B)
 // ════════════════════════════════════════
+
+// ── GET /admin/orgs ──
+adminRouter.get('/orgs', async (req: Request, res: Response) => {
+  const search = req.query.search as string | undefined;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  let query = adminClient
+    .from('organizations')
+    .select('id, name, slug, industry, size, description, website_url, subscription_plan_id, subscription_starts_at, created_at, updated_at', { count: 'exact' });
+
+  if (search) query = query.ilike('name', `%${search}%`);
+
+  const { data: orgs, error, count } = await query
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) throw new AppError(500, error.message);
+
+  // Enrich with member counts and plan names
+  const orgIds = (orgs || []).map((o: any) => o.id);
+
+  const [memberCounts, plans] = await Promise.all([
+    orgIds.length > 0
+      ? adminClient
+          .from('org_members')
+          .select('org_id, count:org_id', { count: 'exact', head: true })
+          .in('org_id', orgIds)
+          .then(() =>
+            // Manual counting since Supabase count with group is tricky
+            Promise.all(orgIds.map((oid: string) =>
+              adminClient
+                .from('org_members')
+                .select('id', { count: 'exact', head: true })
+                .eq('org_id', oid)
+                .then(r => ({ org_id: oid, count: r.count ?? 0 }))
+            ))
+          )
+      : Promise.resolve([] as { org_id: string; count: number }[]),
+
+    adminClient
+      .from('subscription_plans')
+      .select('id, name, slug'),
+  ]);
+
+  const planMap = new Map((plans.data || []).map((p: any) => [p.id, p]));
+  const countMap = new Map(memberCounts.map((m: any) => [m.org_id, m.count]));
+
+  const data = (orgs || []).map((org: any) => ({
+    ...org,
+    member_count: countMap.get(org.id) ?? 0,
+    plan: planMap.get(org.subscription_plan_id) || null,
+  }));
+
+  res.json({ data, count, limit, offset });
+});
 
 // ── GET /admin/roles ──
 adminRouter.get('/roles', async (_req: Request, res: Response) => {
