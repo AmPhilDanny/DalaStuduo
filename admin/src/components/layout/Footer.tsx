@@ -54,7 +54,7 @@ export function Footer() {
               <ul className="space-y-2 text-sm text-primary-foreground/70">
                 {col.links.map((link) => (
                   <li key={link.name}>
-                    <a href={link.href} className="hover:text-secondary transition-colors">{link.name}</a>
+                    <a href={link.href.startsWith('/') ? `${MAIN_SITE_URL}${link.href}` : link.href} className="hover:text-secondary transition-colors">{link.name}</a>
                   </li>
                 ))}
               </ul>

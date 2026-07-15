@@ -303,11 +303,9 @@ export function Navbar() {
                   {profile?.role && ['super_admin', 'admin'].includes(profile.role) && (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem asChild>
-                        <a href="/" className="cursor-pointer flex items-center gap-2 w-full">
-                          <Settings className="w-4 h-4" />
-                          <span>Admin Panel</span>
-                        </a>
+                      <DropdownMenuItem onClick={() => navigate('/')} className="cursor-pointer">
+                        <Settings className="w-4 h-4" />
+                        <span>Admin Panel</span>
                       </DropdownMenuItem>
                     </>
                   )}
