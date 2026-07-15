@@ -30,21 +30,8 @@ import Messages from "@/pages/Messages";
 import Disputes from "@/pages/Disputes";
 import DisputeDetail from "@/pages/DisputeDetail";
 import Connections from "@/pages/Connections";
-import B2BLayout from "@/b2b/components/layout/B2BLayout";
-import B2BDashboard from "@/b2b/pages/B2BDashboard";
 import OrgSetup from "@/b2b/pages/OrgSetup";
-import TalentSearch from "@/b2b/components/talent/TalentSearch";
-import BulkJobPost from "@/b2b/components/hiring/BulkJobPost";
-import PipelineView from "@/b2b/components/hiring/PipelineView";
-import TalentListManager from "@/b2b/components/talent/TalentListManager";
-import TeamList from "@/b2b/components/team/TeamList";
-import ContractList from "@/b2b/components/contracts/ContractList";
-import AnalyticsDashboard from "@/b2b/components/analytics/AnalyticsDashboard";
-import ComplianceDashboard from "@/b2b/components/compliance/ComplianceDashboard";
-import SubscriptionManager from "@/b2b/components/billing/SubscriptionManager";
-import SettingsPage from "@/b2b/components/settings/SettingsPage";
 import InviteAccept from "@/b2b/pages/InviteAccept";
-import { OrgProvider } from "@/b2b/hooks/useOrg";
 
 function AdminRedirect() {
   window.location.href = 'http://localhost:4000/';
@@ -108,7 +95,7 @@ function App() {
               <Route path="/tutor" element={<Tutor />} />
               <Route path="/tutor/:id" element={<TutorChat />} />
               <Route path="/dashboard" element={<UserDashboard />} />
-              <Route path="/dashboard/org" element={<Navigate to="/b2b/dashboard" replace />} />
+              <Route path="/dashboard/org" element={<Navigate to="/dashboard" replace />} />
               <Route path="/jobs/new" element={<PostJob />} />
               <Route path="/marketplace" element={<Marketplace />} />
               <Route path="/marketplace/new" element={<CreateListing />} />
@@ -124,23 +111,7 @@ function App() {
               <Route path="/admin" element={<AdminRedirect />} />
               <Route path="/b2b/setup" element={<OrgSetup />} />
               <Route path="/b2b/invite/accept" element={<InviteAccept />} />
-              <Route path="/b2b" element={
-                <OrgProvider>
-                  <B2BLayout />
-                </OrgProvider>
-              }>
-                <Route index element={<B2BDashboard />} />
-                <Route path="dashboard" element={<B2BDashboard />} />
-                <Route path="team" element={<TeamList />} />
-                <Route path="talent" element={<TalentSearch />} />
-                <Route path="talent/lists" element={<TalentListManager />} />
-                <Route path="hiring" element={<BulkJobPost />} />
-                <Route path="hiring/pipeline" element={<PipelineView />} />
-                <Route path="contracts" element={<ContractList />} />
-                <Route path="compliance" element={<ComplianceDashboard />} />
-                <Route path="analytics" element={<AnalyticsDashboard />} />
-                <Route path="settings" element={<SettingsPage />} />
-              </Route>
+              <Route path="/b2b/*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </main>
           <Footer />

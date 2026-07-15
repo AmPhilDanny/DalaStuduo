@@ -56,7 +56,7 @@ export default function PostJob() {
 
       if (error) throw error;
       toast.success('Job posted successfully!');
-      navigate('/b2b/dashboard');
+      navigate('/dashboard');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to post job');
     } finally {
@@ -105,7 +105,7 @@ export default function PostJob() {
         <Button
           variant="ghost"
           className="mb-6"
-          onClick={() => navigate(profile?.role === 'firm' ? '/b2b/dashboard' : '/jobs')}
+          onClick={() => navigate('/dashboard')}
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
