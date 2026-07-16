@@ -149,14 +149,10 @@ export default function AdminDashboard() {
     ai_google_key: '',
     ai_togetherai_key: '',
   });
-  const [aiEnabled, setAiEnabled] = useState<Record<string, boolean>>({
-    ai_openrouter_key: true,
-    ai_mistral_key: true,
-    ai_openai_key: true,
-    ai_groq_key: true,
-    ai_google_key: true,
-    ai_togetherai_key: true,
-  });
+  const [preferredProvider, setPreferredProvider] = useState('');
+  const [aiProviderStatus, setAiProviderStatus] = useState<Record<string, { configured: boolean; active: boolean }>>({});
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string }>>({});
   const [savingKeys, setSavingKeys] = useState(false);
   const [loadingKeys, setLoadingKeys] = useState(false);
 
@@ -421,29 +417,34 @@ export default function AdminDashboard() {
   const loadAiKeys = async () => {
     setLoadingKeys(true);
     try {
-      const { data } = await supabase.from('site_settings').select('key, value');
-      if (data) {
-        setAiKeys((prev) => {
-          const next = { ...prev };
-          for (const entry of data) {
-            const v = entry.value as Record<string, unknown> | null;
-            if (entry.key in next) next[entry.key] = String((v?.api_key as string) || '');
-          }
-          return next;
-        });
-        // Also try to load enabled states from site_config.api_keys
-        const { data: siteCfg } = await supabase.from('site_settings').select('value').eq('key', 'site_config').single();
-        const siteCfgValue = siteCfg?.value as Record<string, unknown> | null;
-        if (siteCfgValue?.api_keys) {
-          setAiEnabled((prev) => {
-            const next = { ...prev };
-            for (const [k, v] of Object.entries(siteCfgValue.api_keys as Record<string, { enabled: boolean }>)) {
-              if (k in next) next[k] = v.enabled !== false;
-            }
-            return next;
-          });
+      const [settingsResult, providersResult] = await Promise.all([
+        get<Record<string, unknown>>('/admin/settings'),
+        get<{ id: string; label: string; configured: boolean; active: boolean }[]>('/ai/providers'),
+      ]);
+
+      // Load API keys from settings
+      const settings = settingsResult.data || {};
+      setAiKeys((prev) => {
+        const next = { ...prev };
+        for (const key of Object.keys(prev)) {
+          const v = settings[key] as Record<string, unknown> | null;
+          if (v?.api_key) next[key] = String(v.api_key);
         }
+        return next;
+      });
+
+      // Load provider status
+      const providers = providersResult.data || [];
+      const statusMap: Record<string, { configured: boolean; active: boolean }> = {};
+      for (const p of providers) {
+        statusMap[p.id] = { configured: p.configured, active: p.active };
       }
+      setAiProviderStatus(statusMap);
+
+      // Load preferred provider from site_config
+      const siteCfgValue = settings.site_config as Record<string, unknown> | null;
+      const apiKeysConfig = siteCfgValue?.api_keys as Record<string, unknown> || {};
+      setPreferredProvider(String(apiKeysConfig.preferred || ''));
     } catch {
       // silently fail
     } finally {
@@ -454,9 +455,11 @@ export default function AdminDashboard() {
   const loadPaymentConfig = async () => {
     setLoadingPaymentConfig(true);
     try {
-      const { data } = await supabase.from('site_settings').select('value').eq('key', 'payment_gateways').maybeSingle();
-      if (data?.value) {
-        setPaymentGateways(data.value as Record<string, { public_key: string; secret_key: string; enabled: boolean }>);
+      const result = await get<Record<string, unknown>>('/admin/settings');
+      const settings = result.data || {};
+      const val = settings.payment_gateways as Record<string, { public_key: string; secret_key: string; enabled: boolean }> | null;
+      if (val) {
+        setPaymentGateways(val);
       }
     } catch {
       // silent
@@ -468,12 +471,7 @@ export default function AdminDashboard() {
   const savePaymentConfig = async () => {
     setSavingPaymentConfig(true);
     try {
-      const { data: existing } = await supabase.from('site_settings').select('id').eq('key', 'payment_gateways').maybeSingle();
-      if (existing) {
-        await supabase.from('site_settings').update({ value: paymentGateways }).eq('key', 'payment_gateways');
-      } else {
-        await supabase.from('site_settings').insert({ key: 'payment_gateways', value: paymentGateways });
-      }
+      await patch('/admin/settings', { key: 'payment_gateways', value: paymentGateways });
       toast.success('Payment gateway config saved');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save');
@@ -484,9 +482,11 @@ export default function AdminDashboard() {
 
   const loadServiceFee = async () => {
     try {
-      const { data } = await supabase.from('site_settings').select('value').eq('key', 'service_fee').maybeSingle();
-      if (data?.value && typeof data.value === 'object' && 'percentage' in (data.value as Record<string, unknown>)) {
-        setServiceFeePct(Number((data.value as Record<string, unknown>).percentage) || 5);
+      const result = await get<Record<string, unknown>>('/admin/settings');
+      const settings = result.data || {};
+      const val = settings.service_fee as Record<string, unknown> | null;
+      if (val && typeof val === 'object' && 'percentage' in val) {
+        setServiceFeePct(Number(val.percentage) || 5);
       }
     } catch {
       // silent
@@ -496,13 +496,7 @@ export default function AdminDashboard() {
   const saveServiceFee = async () => {
     setSavingServiceFee(true);
     try {
-      const val = { percentage: serviceFeePct };
-      const { data: existing } = await supabase.from('site_settings').select('id').eq('key', 'service_fee').maybeSingle();
-      if (existing) {
-        await supabase.from('site_settings').update({ value: val }).eq('key', 'service_fee');
-      } else {
-        await supabase.from('site_settings').insert({ key: 'service_fee', value: val });
-      }
+      await patch('/admin/settings', { key: 'service_fee', value: { percentage: serviceFeePct } });
       toast.success('Service fee updated');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save');
@@ -965,22 +959,20 @@ export default function AdminDashboard() {
   const saveAiKeys = async () => {
     setSavingKeys(true);
     try {
+      const settings: Record<string, unknown> = {};
       for (const [key, apiKey] of Object.entries(aiKeys)) {
-        const { data: existing } = await supabase.from('site_settings').select('id').eq('key', key).maybeSingle();
-        if (existing) {
-          await supabase.from('site_settings').update({ value: { api_key: apiKey } }).eq('key', key);
-        } else {
-          await supabase.from('site_settings').insert({ key, value: { api_key: apiKey } });
-        }
+        settings[key] = { api_key: apiKey };
       }
+      // Save preferred provider to site_config
+      const result = await get<Record<string, unknown>>('/admin/settings');
+      const siteSettings = result.data || {};
+      const existingConfig = (siteSettings.site_config as Record<string, unknown>) || {};
+      settings.site_config = {
+        ...existingConfig,
+        api_keys: { ...((existingConfig.api_keys as Record<string, unknown>) || {}), preferred: preferredProvider },
+      };
 
-      // Save enabled states to site_config.api_keys
-      const { data: siteCfg } = await supabase.from('site_settings').select('value').eq('key', 'site_config').single();
-      const updatedCfg = { ...((siteCfg?.value as Record<string, unknown>) || {}), api_keys: aiEnabled };
-      if (siteCfg) {
-        await supabase.from('site_settings').update({ value: updatedCfg }).eq('key', 'site_config');
-      }
-
+      await patch('/admin/settings/batch', { settings });
       toast.success('API keys saved. Changes apply on next edge function cold start.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save API keys');
@@ -1569,33 +1561,127 @@ export default function AdminDashboard() {
           {/* ═══ AI SETTINGS ═══ */}
           {activeTab === 'ai-settings' && (
             <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Key className="w-5 h-5 text-secondary" /> AI Provider API Keys</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Key className="w-5 h-5 text-secondary" /> AI Provider Configuration</CardTitle></CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground mb-6">
-                  Store API keys here instead of using <code className="bg-muted px-1.5 py-0.5 rounded text-xs">supabase secrets set</code>.
-                  Keys saved here take precedence over environment variables. Changes apply on the next edge function cold start.
+                  Configure API keys for AI providers. Select your preferred provider below. Use the test button to verify each key.
                 </p>
-                <div className="space-y-4 max-w-xl">
-                  {Object.entries(AI_PROVIDER_LABELS).map(([key, label]) => (
-                    <div key={key} className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">{label}</Label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" checked={aiEnabled[key] ?? true} onChange={(e) => setAiEnabled((prev) => ({ ...prev, [key]: e.target.checked }))} className="rounded border-gray-300" />
-                          <span className="text-xs">{aiEnabled[key] !== false ? 'Enabled' : 'Disabled'}</span>
-                        </label>
-                      </div>
-                      <Input type="password" placeholder={`${label} API key...`} value={aiKeys[key]} onChange={(e) => setAiKeys((prev) => ({ ...prev, [key]: e.target.value }))} className="flex-1 font-mono text-xs" />
+
+                {loadingKeys ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-secondary" /></div>
+                ) : (
+                  <div className="space-y-4 max-w-xl">
+                    {/* Preferred provider selector */}
+                    <div className="mb-6 p-4 bg-muted/30 rounded-lg border">
+                      <Label className="text-sm font-semibold block mb-2">Preferred AI Provider</Label>
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        value={preferredProvider}
+                        onChange={(e) => setPreferredProvider(e.target.value)}
+                      >
+                        <option value="">— Select preferred provider —</option>
+                        {Object.entries(AI_PROVIDER_LABELS).map(([key, label]) => {
+                          const status = aiProviderStatus[key];
+                          return (
+                            <option key={key} value={key}>
+                              {label} {status ? (status.configured ? '(configured)' : '(no key)') : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        The preferred provider is used across the platform for AI features.
+                        {aiProviderStatus[preferredProvider]?.active && (
+                          <span className="text-green-600 font-medium"> Currently active.</span>
+                        )}
+                      </p>
                     </div>
-                  ))}
-                  <div className="flex gap-2 pt-2">
-                    <Button onClick={saveAiKeys} disabled={savingKeys} className="gap-1.5">
-                      {savingKeys ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      {savingKeys ? 'Saving...' : 'Save all keys'}
-                    </Button>
-                    <Button variant="outline" onClick={loadAiKeys} disabled={loadingKeys}>{loadingKeys ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Refresh'}</Button>
+
+                    {/* API key inputs */}
+                    {Object.entries(AI_PROVIDER_LABELS).map(([key, label]) => {
+                      const testResult = testResults[key];
+                      const status = aiProviderStatus[key];
+                      return (
+                        <div key={key} className="space-y-1.5 p-3 border rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Label className="text-sm font-medium">{label}</Label>
+                              {status?.active && (
+                                <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">active</span>
+                              )}
+                              {preferredProvider === key && !status?.active && (
+                                <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">preferred</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {testResult && (
+                                <span className={`flex items-center gap-1 text-xs ${testResult.ok ? 'text-green-600' : 'text-red-600'}`}>
+                                  {testResult.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                                  {testResult.message}
+                                </span>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs gap-1"
+                                disabled={testingProvider === key || !aiKeys[key]}
+                                onClick={async () => {
+                                  setTestingProvider(key);
+                                  setTestResults((prev) => ({ ...prev, [key]: undefined as any }));
+                                  try {
+                                    const { data: sessionData } = await supabase.auth.getSession();
+                                    const token = sessionData.session?.access_token;
+                                    if (!token) throw new Error('Not authenticated');
+                                    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
+                                    const res = await fetch(`${baseUrl}/ai/test`, {
+                                      method: 'POST',
+                                      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ provider: key }),
+                                    });
+                                    if (res.ok) {
+                                      setTestResults((prev) => ({ ...prev, [key]: { ok: true, message: 'Working' } }));
+                                    } else {
+                                      const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+                                      setTestResults((prev) => ({ ...prev, [key]: { ok: false, message: err.error || 'Test failed' } }));
+                                    }
+                                  } catch (err) {
+                                    setTestResults((prev) => ({ ...prev, [key]: { ok: false, message: err instanceof Error ? err.message : 'Request failed' } }));
+                                  } finally {
+                                    setTestingProvider(null);
+                                  }
+                                }}
+                              >
+                                {testingProvider === key ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                                Test
+                              </Button>
+                            </div>
+                          </div>
+                          <Input
+                            type="password"
+                            placeholder={`${label} API key...`}
+                            value={aiKeys[key]}
+                            onChange={(e) => {
+                              setAiKeys((prev) => ({ ...prev, [key]: e.target.value }));
+                              // Clear previous test result when key changes
+                              if (testResults[key]) setTestResults((prev) => { const n = { ...prev }; delete n[key]; return n; });
+                            }}
+                            className="flex-1 font-mono text-xs"
+                          />
+                        </div>
+                      );
+                    })}
+
+                    <div className="flex gap-2 pt-2">
+                      <Button onClick={saveAiKeys} disabled={savingKeys} className="gap-1.5">
+                        {savingKeys ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        {savingKeys ? 'Saving...' : 'Save All'}
+                      </Button>
+                      <Button variant="outline" onClick={loadAiKeys} disabled={loadingKeys}>
+                        {loadingKeys ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           )}

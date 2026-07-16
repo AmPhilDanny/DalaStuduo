@@ -97,6 +97,31 @@ adminRouter.get('/users/:id', async (req: Request, res: Response) => {
   res.json({ data });
 });
 
+// ── PATCH /admin/users/:id/confirm-email — Super admin confirms user email ──
+adminRouter.patch('/users/:id/confirm-email', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const supabaseUrl = process.env.SUPABASE_URL!;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+  const response = await fetch(`${supabaseUrl}/auth/v1/admin/users/${id}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${serviceRole}`,
+      'Content-Type': 'application/json',
+      apikey: serviceRole,
+    },
+    body: JSON.stringify({ email_confirm: true }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ msg: `HTTP ${response.status}` }));
+    throw new AppError(response.status, err.msg || 'Failed to confirm email');
+  }
+
+  const result = await response.json();
+  res.json({ data: { id: result.id, email: result.email, email_confirmed_at: result.email_confirmed_at } });
+});
+
 // ── PATCH /admin/users/:id/profile ──
 adminRouter.patch('/users/:id/profile',
   validate(z.object({
@@ -242,6 +267,23 @@ adminRouter.patch('/settings',
     const { key, value } = req.body;
     await adminClient.from('site_settings').upsert({ key, value }, { onConflict: 'key' });
     res.json({ data: { key, value } });
+  }
+);
+
+// ── PATCH /admin/settings/batch — Bulk save multiple settings ──
+adminRouter.patch('/settings/batch',
+  validate(z.object({ settings: z.record(z.any()) })),
+  async (req: Request, res: Response) => {
+    const { settings } = req.body;
+    const entries = Object.entries(settings);
+    if (entries.length === 0) throw new AppError(400, 'No settings provided');
+
+    const results: Record<string, unknown> = {};
+    for (const [key, value] of entries) {
+      await adminClient.from('site_settings').upsert({ key, value }, { onConflict: 'key' });
+      results[key] = value;
+    }
+    res.json({ data: results });
   }
 );
 

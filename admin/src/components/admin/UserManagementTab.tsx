@@ -33,7 +33,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Search, Plus, Trash2, ShieldAlert, Save, X, MapPin, Building2, Globe, Tag, Calendar, Clock, User, Briefcase, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadCSV } from '@/lib/export';
-import { adminApi, type AdminRole } from '@/lib/api-client';
+import { adminApi, patch, type AdminRole } from '@/lib/api-client';
 import RoleManager from './RoleManager';
 
 interface AdminProfile {
@@ -84,6 +84,9 @@ export default function UserManagementTab() {
   // Delete confirm
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Confirm email
+  const [confirmingEmail, setConfirmingEmail] = useState(false);
 
   // Profile detail dialog
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
@@ -606,6 +609,26 @@ export default function UserManagementTab() {
                 <Button variant="outline" onClick={() => { setProfileUserId(null); setProfile(null); }}>
                   <X className="w-4 h-4 mr-1.5" />
                   Cancel
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    if (!profileUserId) return;
+                    setConfirmingEmail(true);
+                    try {
+                      await patch(`/admin/users/${profileUserId}/confirm-email`);
+                      toast.success('Email confirmed successfully');
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : 'Failed to confirm email');
+                    } finally {
+                      setConfirmingEmail(false);
+                    }
+                  }}
+                  disabled={confirmingEmail}
+                  className="gap-1.5"
+                >
+                  {confirmingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Confirm Email
                 </Button>
                 <Button onClick={handleSaveProfile} disabled={profileSaving}>
                   {profileSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Save className="w-4 h-4 mr-1.5" />}
