@@ -547,54 +547,64 @@ adminRouter.get('/orgs', async (req: Request, res: Response) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
   const offset = parseInt(req.query.offset as string) || 0;
 
-  let query = adminClient
-    .from('organizations')
-    .select('id, name, slug, industry, size, description, website_url, logo_url, subscription_plan_id, subscription_starts_at, created_at, updated_at, status', { count: 'exact' });
+  try {
+    let query = adminClient
+      .from('organizations')
+      .select('id, name, slug, industry, size, description, website_url, subscription_plan_id, subscription_starts_at, created_at, updated_at, status', { count: 'exact' });
 
-  if (search) query = query.ilike('name', `%${search}%`);
+    if (search) query = query.ilike('name', `%${search}%`);
 
-  const { data: orgs, error, count } = await query
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
+    const { data: orgs, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
-  if (error) throw new AppError(500, error.message);
+    if (error) {
+      if (error.code === '42P01') {
+        return res.json({ data: [], count: 0, limit, offset });
+      }
+      throw new AppError(500, error.message);
+    }
 
-  // Enrich with member counts and plan names
-  const orgIds = (orgs || []).map((o: any) => o.id);
+    // Enrich with member counts and plan names
+    const orgIds = (orgs || []).map((o: any) => o.id);
 
-  const [memberCounts, plans] = await Promise.all([
-    orgIds.length > 0
-      ? adminClient
-          .from('org_members')
-          .select('org_id, count:org_id', { count: 'exact', head: true })
-          .in('org_id', orgIds)
-          .then(() =>
-            // Manual counting since Supabase count with group is tricky
-            Promise.all(orgIds.map((oid: string) =>
-              adminClient
-                .from('org_members')
-                .select('id', { count: 'exact', head: true })
-                .eq('org_id', oid)
-                .then(r => ({ org_id: oid, count: r.count ?? 0 }))
-            ))
-          )
-      : Promise.resolve([] as { org_id: string; count: number }[]),
+    const [memberCounts, plans] = await Promise.all([
+      orgIds.length > 0
+        ? adminClient
+            .from('org_members')
+            .select('org_id, count:org_id', { count: 'exact', head: true })
+            .in('org_id', orgIds)
+            .then(() =>
+              // Manual counting since Supabase count with group is tricky
+              Promise.all(orgIds.map((oid: string) =>
+                adminClient
+                  .from('org_members')
+                  .select('id', { count: 'exact', head: true })
+                  .eq('org_id', oid)
+                  .then(r => ({ org_id: oid, count: r.count ?? 0 }))
+              ))
+            )
+        : Promise.resolve([] as { org_id: string; count: number }[]),
 
-    adminClient
-      .from('subscription_plans')
-      .select('id, name, slug'),
-  ]);
+      adminClient
+        .from('subscription_plans')
+        .select('id, name, slug'),
+    ]);
 
-  const planMap = new Map((plans.data || []).map((p: any) => [p.id, p]));
-  const countMap = new Map(memberCounts.map((m: any) => [m.org_id, m.count]));
+    const planMap = new Map((plans.data || []).map((p: any) => [p.id, p]));
+    const countMap = new Map(memberCounts.map((m: any) => [m.org_id, m.count]));
 
-  const data = (orgs || []).map((org: any) => ({
-    ...org,
-    member_count: countMap.get(org.id) ?? 0,
-    plan: planMap.get(org.subscription_plan_id) || null,
-  }));
+    const data = (orgs || []).map((org: any) => ({
+      ...org,
+      member_count: countMap.get(org.id) ?? 0,
+      plan: planMap.get(org.subscription_plan_id) || null,
+    }));
 
-  res.json({ data, count, limit, offset });
+    res.json({ data, count, limit, offset });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    res.json({ data: [], count: 0, limit, offset });
+  }
 });
 
 // ── PATCH /admin/orgs/:id/status — Suspend / Reactivate / Disable ──
