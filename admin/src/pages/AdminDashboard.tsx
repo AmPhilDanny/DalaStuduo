@@ -445,8 +445,8 @@ export default function AdminDashboard() {
       const siteCfgValue = settings.site_config as Record<string, unknown> | null;
       const apiKeysConfig = siteCfgValue?.api_keys as Record<string, unknown> || {};
       setPreferredProvider(String(apiKeysConfig.preferred || ''));
-    } catch {
-      // silently fail
+    } catch (err) {
+      console.warn('Failed to load AI settings:', err);
     } finally {
       setLoadingKeys(false);
     }
@@ -461,8 +461,8 @@ export default function AdminDashboard() {
       if (val) {
         setPaymentGateways(val);
       }
-    } catch {
-      // silent
+    } catch (err) {
+      console.warn('Failed to load payment config:', err);
     } finally {
       setLoadingPaymentConfig(false);
     }
@@ -488,8 +488,8 @@ export default function AdminDashboard() {
       if (val && typeof val === 'object' && 'percentage' in val) {
         setServiceFeePct(Number(val.percentage) || 5);
       }
-    } catch {
-      // silent
+    } catch (err) {
+      console.warn('Failed to load service fee:', err);
     }
   };
 
@@ -512,7 +512,9 @@ export default function AdminDashboard() {
       if (listingStatusFilter) query = query.eq('status', listingStatusFilter);
       const { data } = await query;
       setAdminListings(data || []);
-    } catch {} finally {
+    } catch (err) {
+      console.warn('Failed to load listings:', err);
+    } finally {
       setLoadingListings(false);
     }
   };
@@ -524,7 +526,9 @@ export default function AdminDashboard() {
       if (projectStatusFilter) query = query.eq('status', projectStatusFilter);
       const { data } = await query;
       setAdminProjects(data || []);
-    } catch {} finally {
+    } catch (err) {
+      console.warn('Failed to load projects:', err);
+    } finally {
       setLoadingProjects(false);
     }
   };
@@ -537,10 +541,10 @@ export default function AdminDashboard() {
       const tok = ses.session?.access_token;
       if (!tok) throw new Error('Not authenticated');
 
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4001';
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
       if (adminAction.type === 'edit') {
-        const res = await fetch(`${baseUrl}/api/admin/${adminAction.entity}s/${adminAction.id}`, {
+        const res = await fetch(`${baseUrl}/admin/${adminAction.entity}s/${adminAction.id}`, {
           method: 'PATCH',
           headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: adminNewStatus, reason: adminReason }),
@@ -550,7 +554,7 @@ export default function AdminDashboard() {
       } else {
         const params = new URLSearchParams();
         if (adminReason) params.set('reason', adminReason);
-        const res = await fetch(`${baseUrl}/api/admin/${adminAction.entity}s/${adminAction.id}?${params}`, { method: 'DELETE', headers: { Authorization: `Bearer ${tok}` } });
+        const res = await fetch(`${baseUrl}/admin/${adminAction.entity}s/${adminAction.id}?${params}`, { method: 'DELETE', headers: { Authorization: `Bearer ${tok}` } });
         if (!res.ok) throw new Error('Failed to delete');
         toast.success(`${adminAction.entity === 'listing' ? 'Listing' : 'Project'} deleted`);
       }
@@ -576,8 +580,8 @@ export default function AdminDashboard() {
         .eq('status', 'disputed')
         .order('created_at', { ascending: false });
       setDisputedOrders((data || []) as unknown as AdminOrder[]);
-    } catch {
-      // silent
+    } catch (err) {
+      console.warn('Failed to load disputed orders:', err);
     }
   };
 
@@ -605,7 +609,9 @@ export default function AdminDashboard() {
           });
         }
       }
-    } catch {} finally {
+    } catch (err) {
+      console.warn('Failed to load offline payment config:', err);
+    } finally {
       setLoadingOfflinePayment(false);
     }
   };
@@ -636,7 +642,9 @@ export default function AdminDashboard() {
     try {
       const data = await getAdminManualPayments();
       setManualPayments(data);
-    } catch {} finally {
+    } catch (err) {
+      console.warn('Failed to load manual payments:', err);
+    } finally {
       setLoadingManualPayments(false);
     }
   };

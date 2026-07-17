@@ -133,7 +133,8 @@ export default function UserManagementTab() {
     try {
       const res = await adminApi.roles();
       setRoles(res.data || []);
-    } catch {
+    } catch (err) {
+      console.warn('Failed to load roles:', err);
     } finally {
       setRolesLoading(false);
     }

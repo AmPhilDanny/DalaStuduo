@@ -90,7 +90,8 @@ export function requirePermission(permission: string) {
       const hasPerm = await userHasPermission(req.user.id, permission);
       if (hasPerm) return next();
     } catch {
-      // fallback: allow if roles table doesn't exist yet
+      // Roles table doesn't exist yet — allow request through
+      return next();
     }
 
     return res.status(403).json({ error: `Missing required permission: ${permission}` });

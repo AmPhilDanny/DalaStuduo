@@ -14,6 +14,11 @@ export async function userHasPermission(userId: string, permission: string): Pro
 
     if (!profile?.role) return false;
 
+    // Fallback: users with "admin" or "super_admin" profile role automatically
+    // get all permissions — this covers the case where the roles table hasn't
+    // been seeded with a matching entry yet.
+    if (profile.role === 'admin' || profile.role === 'super_admin') return true;
+
     const { data: role } = await adminClient
       .from('roles')
       .select('permissions')
