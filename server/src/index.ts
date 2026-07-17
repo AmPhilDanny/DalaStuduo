@@ -39,20 +39,31 @@ app.use(helmet({
       upgradeInsecureRequests: [],
     },
   },
+  crossOriginResourcePolicy: false,
 }));
 const ALLOWED_ORIGINS = [
   /^https?:\/\/localhost:(3000|4000)$/,
-  /^https:\/\/[a-zA-Z0-9-]+\.onrender\.com$/,
+  'https://novaxbridgeadmin.onrender.com',
+  /^https:\/\/[a-zA-Z0-9-]+\.onrender\.com$/i,
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (server-to-server, curl, health checks)
     if (!origin) return callback(null, true);
-    const ok = ALLOWED_ORIGINS.some((re) => re.test(origin));
-    callback(null, ok);
+    try {
+      const ok = ALLOWED_ORIGINS.some((re) => {
+        if (typeof re === 'string') return origin === re;
+        return re.test(origin);
+      });
+      callback(null, ok);
+    } catch (err) {
+      callback(err as Error);
+    }
   },
   credentials: true,
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json({ limit: '10mb' }));
 
