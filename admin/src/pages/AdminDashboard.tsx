@@ -42,7 +42,7 @@ import {
 import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, 
 RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, 
 Building2, Banknote, Image as ImageIcon, ChevronLeft, ChevronRight, Bell, LogOut, LayoutDashboard, Edit, Trash2, 
-ExternalLink, Calendar, FileText, Briefcase } from 'lucide-react';
+ExternalLink, Calendar, FileText, Briefcase, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
