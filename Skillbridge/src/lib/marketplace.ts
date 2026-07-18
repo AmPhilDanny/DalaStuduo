@@ -131,6 +131,16 @@ export async function createListing(body: {
   return res.data;
 }
 
+export async function updateListing(id: string, data: {
+  title: string;
+  description: string;
+  price: number;
+  duration_hours: number;
+}): Promise<MarketplaceListing> {
+  const res = await marketplaceApi.updateListing(id, data);
+  return res.data;
+}
+
 // ── Orders ──
 
 export async function getOrders(params?: {

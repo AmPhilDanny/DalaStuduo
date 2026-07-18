@@ -26,9 +26,9 @@ import { toast } from 'sonner';
 import {
   getMyListings,
   deleteListing,
+  updateListing,
   MarketplaceListing,
 } from '@/lib/marketplace';
-import { supabase } from '@/integrations/supabase/client';
 
 export default function MyListings() {
   const { user } = useAuth();
@@ -78,25 +78,12 @@ export default function MyListings() {
     }
     setSaving(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) throw new Error('Not authenticated');
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const res = await fetch(`${supabaseUrl}/functions/v1/marketplace-listings/listings/${editing.id}`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: editTitle.trim(),
-          description: editDesc.trim(),
-          price: Number(editPrice),
-          duration_hours: Number(editDuration),
-        }),
+      await updateListing(editing.id, {
+        title: editTitle.trim(),
+        description: editDesc.trim(),
+        price: Number(editPrice),
+        duration_hours: Number(editDuration),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Update failed');
-      }
       toast.success('Listing updated');
       setEditing(null);
       fetchListings();
