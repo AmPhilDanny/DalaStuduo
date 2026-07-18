@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,16 +43,20 @@ export default function SiteSettingsTab() {
 
   useEffect(() => { loadConfig(); }, []);
 
-  const uploadFile = async (file: File, targetPath: string): Promise<string | null> => {
-    const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-    const filePath = `${targetPath}/${fileName}`;
-    const { error } = await supabase.storage.from('site-assets').upload(filePath, file, {
-      cacheControl: '3600',
-      upsert: true,
-    });
-    if (error) { toast.error('Upload failed: ' + error.message); return null; }
-    const { data: urlData } = supabase.storage.from('site-assets').getPublicUrl(filePath);
-    return urlData?.publicUrl || null;
+  const uploadFile = async (file: File, folder: string): Promise<string | null> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', folder);
+    try {
+      const res = await fetch(`${API_BASE}/admin/upload`, { method: 'POST', body: formData, credentials: 'include' });
+      if (!res.ok) { const err = await res.json(); toast.error('Upload failed: ' + (err.error || res.statusText)); return null; }
+      const json = await res.json();
+      return json.data.url;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Upload failed';
+      toast.error(msg);
+      return null;
+    }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {

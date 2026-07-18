@@ -242,6 +242,9 @@ export default function AdminDashboard() {
   const [adminListings, setAdminListings] = useState<any[]>([]);
   const [listingStatusFilter, setListingStatusFilter] = useState('');
   const [loadingListings, setLoadingListings] = useState(false);
+  const [listingTTLDays, setListingTTLDays] = useState(0);
+  const [runningExpiryCheck, setRunningExpiryCheck] = useState(false);
+  const [savingListingTTL, setSavingListingTTL] = useState(false);
 
   // Projects management
   const [adminProjects, setAdminProjects] = useState<any[]>([]);
@@ -340,6 +343,7 @@ export default function AdminDashboard() {
       loadManualPayments();
       loadListings();
       loadProjects();
+      loadListingTTL();
     } catch (error) {
       toast.error('Failed to load admin data');
     } finally {
@@ -534,6 +538,41 @@ export default function AdminDashboard() {
       toast.error(error instanceof Error ? error.message : 'Failed to save');
     } finally {
       setSavingServiceFee(false);
+    }
+  };
+
+  const loadListingTTL = async () => {
+    try {
+      const result = await get<Record<string, unknown>>('/admin/settings');
+      const settings = result.data || {};
+      const val = settings.listing_ttl_days as number | null;
+      if (val != null) setListingTTLDays(val);
+    } catch { /* ignore */ }
+  };
+
+  const saveListingTTL = async () => {
+    setSavingListingTTL(true);
+    try {
+      await patch('/admin/settings', { key: 'listing_ttl_days', value: listingTTLDays });
+      toast.success('Listing TTL saved');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save');
+    } finally {
+      setSavingListingTTL(false);
+    }
+  };
+
+  const runExpiryCheck = async () => {
+    setRunningExpiryCheck(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4001/api'}/admin/listings/expire-check`, { method: 'POST', credentials: 'include' });
+      const json = await res.json();
+      toast.success(json.message || `${json.expired} listing(s) expired`);
+      loadListings();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Expiry check failed');
+    } finally {
+      setRunningExpiryCheck(false);
     }
   };
 
@@ -1828,6 +1867,16 @@ export default function AdminDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
+                <div className="flex flex-wrap items-center gap-2 mb-4 pb-3 border-b">
+                  <Label className="text-xs whitespace-nowrap">Auto-expire after (days):</Label>
+                  <Input type="number" min="0" className="w-20 h-8 text-xs" value={listingTTLDays || ''} onChange={e => setListingTTLDays(Number(e.target.value) || 0)} />
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={saveListingTTL} disabled={savingListingTTL}>
+                    {savingListingTTL ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={runExpiryCheck} disabled={runningExpiryCheck}>
+                    {runningExpiryCheck ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} Expire Old
+                  </Button>
+                </div>
                 <div className="flex items-center gap-2 mb-4">
                   <Select value={listingStatusFilter} onValueChange={setListingStatusFilter}>
                     <SelectTrigger className="w-[180px]"><SelectValue placeholder="All statuses" /></SelectTrigger>

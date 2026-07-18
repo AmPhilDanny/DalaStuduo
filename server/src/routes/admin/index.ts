@@ -519,14 +519,16 @@ adminRouter.get('/listings', async (req: Request, res: Response) => {
 // ── PATCH /admin/listings/:id — admin update listing ──
 adminRouter.patch('/listings/:id',
   validate(z.object({
-    status: z.enum(['active', 'paused', 'completed', 'cancelled']).optional(),
+    status: z.enum(['active', 'inactive', 'paused', 'completed', 'cancelled']).optional(),
     reason: z.string().optional(),
+    expires_at: z.string().optional(),
   })),
   async (req: Request, res: Response) => {
     const { id } = req.params;
     const updates: Record<string, unknown> = {};
     if (req.body.status) updates.status = req.body.status;
     if (req.body.reason) updates.admin_reason = req.body.reason;
+    if (req.body.expires_at !== undefined) updates.expires_at = req.body.expires_at || null;
     if (Object.keys(updates).length === 0) throw new AppError(400, 'No fields to update');
 
     const { data: existing } = await adminClient.from('marketplace_listings').select('*, provider:profiles(id, full_name)').eq('id', id).single();
@@ -659,6 +661,42 @@ adminRouter.patch('/config',
     res.json({ data: { key, value } });
   }
 );
+
+// ── POST /admin/listings/expire-check — expire listings past their TTL ──
+adminRouter.post('/listings/expire-check', async (_req: Request, res: Response) => {
+  const { data: configData } = await adminClient.from('platform_config').select('value').eq('key', 'listing_ttl_days').maybeSingle();
+  const ttlDays = configData?.value as number | null;
+  if (!ttlDays || ttlDays <= 0) {
+    res.json({ status: 'ok', expired: 0, message: 'No listing TTL configured' });
+    return;
+  }
+  const cutoff = new Date(Date.now() - ttlDays * 24 * 60 * 60 * 1000).toISOString();
+  const { data: expired, error } = await adminClient
+    .from('marketplace_listings')
+    .update({ status: 'inactive' })
+    .eq('status', 'active')
+    .lt('created_at', cutoff)
+    .select();
+  if (error) throw new AppError(500, error.message);
+  res.json({ status: 'ok', expired: expired?.length || 0, ttlDays });
+});
+
+// ── POST /admin/upload — upload site asset using service_role (bypasses RLS) ──
+import multer from 'multer';
+const upload_multer = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+adminRouter.post('/upload', upload_multer.single('file'), async (req: Request, res: Response) => {
+  if (!req.file) throw new AppError(400, 'No file provided');
+  const folder = (req.body.folder as string) || 'brand';
+  const fileName = `${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+  const filePath = `${folder}/${fileName}`;
+  const { error: uploadError } = await adminClient.storage.from('site-assets').upload(filePath, req.file.buffer, {
+    contentType: req.file.mimetype,
+    upsert: true,
+  });
+  if (uploadError) throw new AppError(500, uploadError.message);
+  const { data: urlData } = adminClient.storage.from('site-assets').getPublicUrl(filePath);
+  res.json({ data: { url: urlData?.publicUrl || null, path: filePath } });
+});
 
 // ════════════════════════════════════════
 // ORGANIZATIONS (B2B)
