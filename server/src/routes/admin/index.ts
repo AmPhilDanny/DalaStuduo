@@ -685,12 +685,13 @@ adminRouter.post('/listings/expire-check', async (_req: Request, res: Response) 
 import multer from 'multer';
 const upload_multer = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 adminRouter.post('/upload', upload_multer.single('file'), async (req: Request, res: Response) => {
-  if (!req.file) throw new AppError(400, 'No file provided');
+  const f = (req as any).file as { originalname: string; buffer: Buffer; mimetype: string } | undefined;
+  if (!f) throw new AppError(400, 'No file provided');
   const folder = (req.body.folder as string) || 'brand';
-  const fileName = `${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+  const fileName = `${Date.now()}-${f.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
   const filePath = `${folder}/${fileName}`;
-  const { error: uploadError } = await adminClient.storage.from('site-assets').upload(filePath, req.file.buffer, {
-    contentType: req.file.mimetype,
+  const { error: uploadError } = await adminClient.storage.from('site-assets').upload(filePath, f.buffer, {
+    contentType: f.mimetype,
     upsert: true,
   });
   if (uploadError) throw new AppError(500, uploadError.message);

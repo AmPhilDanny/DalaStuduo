@@ -24,6 +24,7 @@
     "ioredis": "^5.4.0",
     "jsonwebtoken": "^9.0.0",
     "multer": "^2.2.0",
+    "@types/multer": "^2.2.0",
     "pino": "^9.0.0",
     "pino-pretty": "^11.0.0",
     "typescript": "~5.8.0",
