@@ -46,7 +46,7 @@ ExternalLink, Calendar, FileText, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
-import { get, post, patch, del } from '@/lib/api-client';
+import { get, post, patch, del, adminApi } from '@/lib/api-client';
 import { downloadCSV } from '@/lib/export';
 import { usePermissions } from '@/hooks/usePermissions';
 import SiteSettingsTab from '@/components/admin/SiteSettingsTab';
@@ -317,7 +317,7 @@ export default function AdminDashboard() {
     setIsLoading(true);
     try {
       const [svcRes, ordRes, usrRes, ptRes] = await Promise.all([
-        supabase.from('services').select('*').order('name'),
+        adminApi.services().catch(() => supabase.from('services').select('*').order('name')),
         supabase
           .from('orders')
           .select('*, listing:marketplace_listings(title), buyer:profiles!buyer_id(id, full_name), provider:profiles!provider_id(id, full_name)')
@@ -357,16 +357,23 @@ export default function AdminDashboard() {
   const saveService = async () => {
     if (!editingService) return;
     try {
-      const { error } = await supabase
-        .from('services')
-        .update({ name: editName, description: editDesc, base_price: editPrice })
-        .eq('id', editingService.id);
-      if (error) throw error;
+      await adminApi.updateService(editingService.id, { name: editName, description: editDesc, base_price: editPrice });
       toast.success('Service updated');
       setEditingService(null);
       fetchAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update');
+    }
+  };
+
+  const handleDeleteService = async (service: AdminService) => {
+    if (!confirm(`Delete service "${service.name}"? This action cannot be undone.`)) return;
+    try {
+      await adminApi.deleteService(service.id);
+      toast.success('Service deleted');
+      fetchAll();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete service');
     }
   };
 
@@ -402,15 +409,47 @@ export default function AdminDashboard() {
 
   const toggleServiceActive = async (service: AdminService) => {
     try {
-      const { error } = await supabase
-        .from('services')
-        .update({ is_active: !service.is_active })
-        .eq('id', service.id);
-      if (error) throw error;
+      await adminApi.updateService(service.id, { is_active: !service.is_active });
       toast.success(`${service.name} ${service.is_active ? 'disabled' : 'enabled'}`);
       fetchAll();
     } catch (error) {
       toast.error('Failed to toggle service');
+    }
+  };
+
+  // Create service dialog
+  const [creatingService, setCreatingService] = useState(false);
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServiceDesc, setNewServiceDesc] = useState('');
+  const [newServicePrice, setNewServicePrice] = useState(0);
+  const [newServiceCategory, setNewServiceCategory] = useState('design');
+  const [creating, setCreating] = useState(false);
+
+  const handleCreateService = async () => {
+    if (!newServiceName.trim() || !newServicePrice) {
+      toast.error('Name and price are required');
+      return;
+    }
+    setCreating(true);
+    try {
+      await adminApi.createService({
+        name: newServiceName.trim(),
+        description: newServiceDesc.trim(),
+        base_price: newServicePrice,
+        category: newServiceCategory,
+        is_active: true,
+      });
+      toast.success('Service created');
+      setCreatingService(false);
+      setNewServiceName('');
+      setNewServiceDesc('');
+      setNewServicePrice(0);
+      setNewServiceCategory('design');
+      fetchAll();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create service');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -1218,7 +1257,10 @@ export default function AdminDashboard() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Services</CardTitle>
-                  <Button variant="outline" size="sm" onClick={exportServices}><Download className="w-3.5 h-3.5 mr-1" /> Export CSV</Button>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" onClick={() => setCreatingService(true)}><Plus className="w-3.5 h-3.5 mr-1" /> Add Service</Button>
+                    <Button variant="outline" size="sm" onClick={exportServices}><Download className="w-3.5 h-3.5 mr-1" /> Export CSV</Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1243,6 +1285,7 @@ export default function AdminDashboard() {
                           <div className="flex justify-end gap-2">
                             <Button size="sm" variant="outline" onClick={() => { setEditingService(svc); setEditName(svc.name); setEditDesc(svc.description || ''); setEditPrice(svc.base_price); }}>Edit</Button>
                             <Button size="sm" variant={svc.is_active ? 'secondary' : 'default'} onClick={() => toggleServiceActive(svc)}>{svc.is_active ? 'Disable' : 'Enable'}</Button>
+                            <Button size="sm" variant="destructive" onClick={() => handleDeleteService(svc)}><Trash2 className="w-3.5 h-3.5" /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -2375,6 +2418,35 @@ export default function AdminDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingService(null)}>Cancel</Button>
             <Button onClick={saveService}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Service Dialog */}
+      <Dialog open={creatingService} onOpenChange={(o) => { if (!o) { setCreatingService(false); setNewServiceName(''); setNewServiceDesc(''); setNewServicePrice(0); setNewServiceCategory('design'); }}}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create Service</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2"><Label>Name</Label><Input value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} placeholder="Service name" /></div>
+            <div className="space-y-2"><Label>Description</Label><Textarea value={newServiceDesc} onChange={(e) => setNewServiceDesc(e.target.value)} placeholder="Service description" /></div>
+            <div className="space-y-2"><Label>Category</Label>
+              <Select value={newServiceCategory} onValueChange={setNewServiceCategory}>
+                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"><Label>Base Price (₦)</Label><Input type="number" min="0" value={newServicePrice} onChange={(e) => setNewServicePrice(Number(e.target.value))} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setCreatingService(false); setNewServiceName(''); setNewServiceDesc(''); setNewServicePrice(0); setNewServiceCategory('design'); }}>Cancel</Button>
+            <Button onClick={handleCreateService} disabled={creating || !newServiceName.trim() || !newServicePrice}>
+              {creating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Create
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -286,7 +286,7 @@ adminRouter.get('/services', async (_req: Request, res: Response) => {
 adminRouter.post('/services',
   validate(z.object({
     name: z.string().min(1),
-    slug: z.string().min(1),
+    slug: z.string().optional(),
     description: z.string().optional(),
     category: z.string().min(1),
     base_price: z.number().optional(),
@@ -295,9 +295,10 @@ adminRouter.post('/services',
   auditLog('create_service', 'services', (req) => null),
   async (req: Request, res: Response) => {
     const { name, slug, description, category, base_price, is_active } = req.body;
+    const finalSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
     const { data, error } = await adminClient
       .from('services')
-      .insert({ name, slug, description: description || null, category, base_price: base_price ?? 0, is_active: is_active ?? true })
+      .insert({ name, slug: finalSlug, description: description || null, category, base_price: base_price ?? 0, is_active: is_active ?? true })
       .select()
       .single();
     if (error) throw new AppError(500, error.message);
