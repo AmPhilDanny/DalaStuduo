@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Briefcase, FileText, User, GraduationCap, TrendingUp, ArrowRight, Star, Search, Users, Target, Building2, Shield, Settings, BarChart3 } from 'lucide-react';
+import { Loader2, Briefcase, FileText, User, GraduationCap, TrendingUp, ArrowRight, Star, Search, Users, Target, Building2, Shield, Settings, BarChart3, Video } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ApplicationWithJob {
@@ -211,6 +211,10 @@ export default function UserDashboard() {
                 <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/tutor')}>
                   <GraduationCap className="w-4 h-4 mr-2" />
                   AI Tutor
+                </Button>
+                <Button variant="outline" className="w-full justify-start" onClick={() => navigate(`/video-call/${crypto.randomUUID().slice(0, 8)}`)}>
+                  <Video className="w-4 h-4 mr-2" />
+                  Video Call
                 </Button>
               </CardContent>
             </Card>

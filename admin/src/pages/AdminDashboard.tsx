@@ -42,7 +42,7 @@ import {
 import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, 
 RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, 
 Building2, Banknote, Image as ImageIcon, ChevronLeft, ChevronRight, Bell, LogOut, LayoutDashboard, Edit, Trash2, 
-ExternalLink, Calendar, FileText, Briefcase, Plus } from 'lucide-react';
+ExternalLink, Calendar, FileText, Briefcase, Plus, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
@@ -1195,6 +1195,8 @@ export default function AdminDashboard() {
     { value: 'ai-settings', label: 'AI Settings', icon: <Key className="w-4 h-4" /> },
     { value: 'manual-payments', label: 'Manual Payments', icon: <Banknote className="w-4 h-4" /> },
     { value: 'site-settings', label: 'Site Settings', icon: <Settings className="w-4 h-4" /> },
+    { value: 'video-calls', label: 'Video Calls', icon: <Video className="w-4 h-4" /> },
+    { value: 'messages', label: 'Messages', icon: <MessageSquare className="w-4 h-4" /> },
   ];
 
   const B2B_NAV_ITEMS: { value: string; label: string; icon: React.ReactNode }[] = [
@@ -2061,6 +2063,12 @@ export default function AdminDashboard() {
           {/* ═══ SITE SETTINGS ═══ */}
           {activeTab === 'site-settings' && <SiteSettingsTab />}
 
+          {/* ═══ VIDEO CALLS ═══ */}
+          {activeTab === 'video-calls' && <AdminVideoCallsTab />}
+
+          {/* ═══ MESSAGES ═══ */}
+          {activeTab === 'messages' && <AdminMessagesTab />}
+
           {/* ═══ B2B: ORGANIZATIONS ═══ */}
           {activeTab === 'organizations' && (
             <Card>
@@ -2803,5 +2811,195 @@ export default function AdminDashboard() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function AdminVideoCallsTab() {
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [ending, setEnding] = useState<string | null>(null);
+
+  const loadRooms = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await get<any[]>('/video-call/admin/rooms');
+      setRooms(res.data || []);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load rooms');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRooms();
+    const interval = setInterval(loadRooms, 10000);
+    return () => clearInterval(interval);
+  }, [loadRooms]);
+
+  const handleEndRoom = async (roomId: string) => {
+    setEnding(roomId);
+    try {
+      await post(`/video-call/admin/rooms/${encodeURIComponent(roomId)}/end`, { reason: 'Ended by admin' });
+      toast.success(`Room ${roomId} ended`);
+      setRooms((prev) => prev.filter((r) => r.id !== roomId));
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to end room');
+    } finally {
+      setEnding(null);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2"><Video className="w-5 h-5 text-secondary" /> Active Video Calls</CardTitle>
+          <Button variant="outline" size="sm" onClick={loadRooms} disabled={loading}>
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Refresh
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading && rooms.length === 0 ? (
+          <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-secondary" /></div>
+        ) : rooms.length === 0 ? (
+          <p className="text-muted-foreground text-center py-8">No active video calls.</p>
+        ) : (
+          <div className="space-y-3">
+            {rooms.map((room) => (
+              <div key={room.id} className="border rounded-lg p-4 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="font-mono text-sm font-medium">{room.id}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {room.peerCount} participant{room.peerCount !== 1 ? 's' : ''} &middot;{' '}
+                    {new Date(room.createdAt).toLocaleString()}
+                  </p>
+                  {room.peers && room.peers.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {room.peers.map((peer: any) => (
+                        <Badge key={peer.id} variant="secondary" className="text-xs">{peer.displayName}</Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={ending === room.id}
+                  onClick={() => handleEndRoom(room.id)}
+                >
+                  {ending === room.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <XCircle className="w-3.5 h-3.5 mr-1" />}
+                  End Call
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AdminMessagesTab() {
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedConvo, setSelectedConvo] = useState<string | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+
+  const loadConversations = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await get<any[]>('/admin/conversations');
+      setConversations(res.data || []);
+    } catch (e: any) {
+      setConversations([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadConversations();
+  }, [loadConversations]);
+
+  const openConversation = async (conversationId: string) => {
+    setSelectedConvo(conversationId);
+    setLoadingMessages(true);
+    try {
+      const res = await get<any[]>(`/messages/${encodeURIComponent(conversationId)}`);
+      setMessages(res.data || []);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load messages');
+      setMessages([]);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2"><MessageSquare className="w-5 h-5 text-secondary" /> Messages</CardTitle>
+          <Button variant="outline" size="sm" onClick={loadConversations} disabled={loading}>
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Refresh
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="border rounded-lg md:col-span-1 max-h-[500px] overflow-y-auto">
+            {loading && conversations.length === 0 ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-secondary" /></div>
+            ) : conversations.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8 text-sm">No conversations.</p>
+            ) : (
+              <div className="divide-y">
+                {conversations.map((conv) => (
+                  <button
+                    key={conv.id}
+                    onClick={() => openConversation(conv.id)}
+                    className={`w-full text-left px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors ${
+                      selectedConvo === conv.id ? 'bg-muted' : ''
+                    }`}
+                  >
+                    <p className="font-medium truncate">{conv.subject || conv.id}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {conv.last_message?.sender_name || conv.last_message?.content?.slice(0, 60) || 'No messages'}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="border rounded-lg md:col-span-2 max-h-[500px] overflow-y-auto p-4 space-y-3">
+            {!selectedConvo ? (
+              <p className="text-muted-foreground text-center py-8 text-sm">Select a conversation to view messages.</p>
+            ) : loadingMessages ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-secondary" /></div>
+            ) : messages.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8 text-sm">No messages in this conversation.</p>
+            ) : (
+              messages.map((msg) => (
+                <div key={msg.id} className="flex items-start gap-2">
+                  <Avatar className="w-7 h-7">
+                    <AvatarFallback className="text-xs">{(msg.sender_name || 'U')[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{msg.sender_name || 'Unknown'}</span>
+                      <span className="text-xs text-muted-foreground">{new Date(msg.created_at || msg.timestamp).toLocaleString()}</span>
+                    </div>
+                    <p className="text-sm mt-0.5 whitespace-pre-wrap break-words">{msg.content}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

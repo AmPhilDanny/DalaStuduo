@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Video, Loader2 } from 'lucide-react';
-import CustomVideoCall from '@/components/messaging/CustomVideoCall';
-import { initCall, getCallHistory } from '@/b2b/lib/api';
-import { toast } from 'sonner';
+import { Video } from 'lucide-react';
+import VideoCallDialog from '@/components/messaging/VideoCallDialog';
 
 interface VideoCallWidgetProps {
   conversationId?: string;
@@ -20,59 +18,35 @@ export default function VideoCallWidget({
   compact,
 }: VideoCallWidgetProps) {
   const [callOpen, setCallOpen] = useState(false);
-  const [roomName, setRoomName] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
 
-  const handleStartCall = async () => {
-    if (!conversationId && !orderId) return;
-    setStarting(true);
-    try {
-      // Check if there's an active call already
-      const history = await getCallHistory(conversationId, orderId);
-      const active = history.data?.find((c) => c.status === 'active');
-      if (active) {
-        setRoomName(active.room_name);
-        setCallOpen(true);
-        return;
-      }
+  const roomId = [conversationId, orderId, crypto.randomUUID().slice(0, 8)]
+    .filter(Boolean)
+    .join('-')
+    .slice(0, 24);
 
-      // Init a new call
-      const result = await initCall(conversationId, orderId);
-      setRoomName(result.data.room_name);
-      setCallOpen(true);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to start video call');
-    } finally {
-      setStarting(false);
-    }
+  const handleStartCall = () => {
+    setCallOpen(true);
   };
 
   return (
     <>
       <Button
         onClick={handleStartCall}
-        disabled={starting}
         variant={compact ? 'ghost' : 'default'}
         size={compact ? 'icon' : 'default'}
         className={compact ? 'h-9 w-9' : 'gap-1.5'}
         title="Start video call"
       >
-        {starting ? (
-          <Loader2 className="w-4 h-4 animate-spin" />
-        ) : (
-          <Video className="w-4 h-4" />
-        )}
-        {!compact && (starting ? 'Starting...' : 'Video Call')}
+        <Video className="w-4 h-4" />
+        {!compact && 'Video Call'}
       </Button>
 
-      {roomName && (
-        <CustomVideoCall
-          open={callOpen}
-          onOpenChange={setCallOpen}
-          roomName={roomName}
-          userName={userName}
-        />
-      )}
+      <VideoCallDialog
+        open={callOpen}
+        onOpenChange={setCallOpen}
+        roomId={roomId}
+        displayName={userName}
+      />
     </>
   );
 }

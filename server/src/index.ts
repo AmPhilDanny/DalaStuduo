@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import http from 'node:http';
+import { Server } from 'socket.io';
 import pino from 'pino';
 import { errorHandler } from './middleware/error.js';
 import { requireAuth, optionalAuth } from './middleware/auth.js';
@@ -19,6 +21,7 @@ import { notificationsRouter } from './routes/notifications/index.js';
 import { webhooksRouter } from './routes/webhooks/index.js';
 import { emailRouter } from './routes/email/index.js';
 import { githubRouter } from './routes/github/index.js';
+import { setupVideoCallSignaling, videoCallRouter } from './routes/video-call/index.js';
 
 const logger = pino({ name: 'skillbridge-server' });
 const app: Express = express();
@@ -32,7 +35,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https:"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://*.supabase.co", "wss://*.supabase.co"],
+      connectSrc: ["'self'", "https://*.supabase.co", "wss://*.supabase.co", "wss://*.onrender.com"],
       fontSrc: ["'self'", "https:", "data:"],
       objectSrc: ["'none'"],
       frameAncestors: ["'self'"],
@@ -115,11 +118,38 @@ app.use('/api/github', requireAuth, githubRouter);
 // ── Admin Routes (auth + admin role) ──
 app.use('/api/admin', requireAuth, adminRouter);
 
+// ── Video Call Admin Routes (auth + admin role) ──
+app.use('/api/video-call', videoCallRouter);
+
 // ── Error Handler ──
 app.use(errorHandler);
 
+// ── HTTP Server + Socket.IO (for video-call signaling) ──
+const httpServer = http.createServer(app);
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      try {
+        const ok = ALLOWED_ORIGINS.some((re) => {
+          if (typeof re === 'string') return origin === re;
+          return re.test(origin);
+        });
+        callback(null, ok);
+      } catch (err) {
+        callback(err as Error);
+      }
+    },
+    credentials: true,
+  },
+  serveClient: false,
+});
+
+setupVideoCallSignaling(io);
+
 // ── Start Server ──
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   logger.info(`SkillBridge API server running on port ${PORT}`);
 });
 

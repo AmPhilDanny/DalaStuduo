@@ -1427,3 +1427,109 @@ adminRouter.get('/applications', async (req: Request, res: Response) => {
     res.json({ data: [], count: 0, limit, offset });
   }
 });
+
+// ════════════════════════════════════════
+// MESSAGING — ADMIN MONITORING
+// ════════════════════════════════════════
+
+/** GET /admin/conversations — list all conversations with participant info */
+adminRouter.get('/conversations', async (req: Request, res: Response) => {
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+  const search = req.query.search as string | undefined;
+
+  let query = adminClient
+    .from('conversations')
+    .select('*', { count: 'exact' })
+    .order('last_message_at', { ascending: false });
+
+  const { data: convs, error, count } = await query.range(offset, offset + limit - 1);
+  if (error) throw new AppError(500, error.message);
+
+  const convIds = (convs || []).map((c: any) => c.id);
+  let partsByConv = new Map<string, any[]>();
+  if (convIds.length > 0) {
+    const { data: parts } = await adminClient
+      .from('conversation_participants')
+      .select('conversation_id, profile_id')
+      .in('conversation_id', convIds);
+    if (parts) {
+      for (const p of parts) {
+        const arr = partsByConv.get(p.conversation_id) || [];
+        arr.push(p.profile_id);
+        partsByConv.set(p.conversation_id, arr);
+      }
+    }
+  }
+
+  const allProfileIds = new Set<string>();
+  for (const [, pids] of partsByConv) {
+    for (const pid of pids) allProfileIds.add(pid);
+  }
+  let profileMap = new Map<string, any>();
+  if (allProfileIds.size > 0) {
+    const { data: profiles } = await adminClient
+      .from('profiles')
+      .select('id, full_name, avatar_url, email')
+      .in('id', Array.from(allProfileIds));
+    if (profiles) {
+      for (const p of profiles) profileMap.set(p.id, p);
+    }
+  }
+
+  const data = (convs || []).map((conv: any) => {
+    const participantIds = partsByConv.get(conv.id) || [];
+    const participants = participantIds.map((pid: string) => profileMap.get(pid)).filter(Boolean);
+    return { ...conv, participants };
+  });
+
+  res.json({ data, count, limit, offset });
+});
+
+/** GET /admin/conversations/:id/messages — view all messages in a conversation */
+adminRouter.get('/conversations/:id/messages', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { data, error } = await adminClient
+    .from('messages')
+    .select('*, message_attachments(*)')
+    .eq('conversation_id', id)
+    .order('created_at', { ascending: true });
+  if (error) throw new AppError(500, error.message);
+
+  const senderIds = [...new Set((data || []).map((m: any) => m.sender_id))];
+  let senderMap = new Map<string, any>();
+  if (senderIds.length > 0) {
+    const { data: senders } = await adminClient
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', senderIds);
+    if (senders) {
+      for (const s of senders) senderMap.set(s.id, s);
+    }
+  }
+
+  const enriched = (data || []).map((m: any) => ({
+    ...m,
+    sender: senderMap.get(m.sender_id) || null,
+  }));
+
+  res.json({ data: enriched });
+});
+
+/** DELETE /admin/conversations/:id/messages/:msgId — delete an inappropriate message */
+adminRouter.delete('/conversations/:id/messages/:msgId', async (req: Request, res: Response) => {
+  const { id, msgId } = req.params;
+
+  const { data: existing } = await adminClient
+    .from('messages')
+    .select('id, conversation_id')
+    .eq('id', msgId)
+    .eq('conversation_id', id)
+    .single();
+  if (!existing) throw new AppError(404, 'Message not found');
+
+  const { error } = await adminClient.from('messages').delete().eq('id', msgId);
+  if (error) throw new AppError(500, error.message);
+
+  res.json({ data: { id: msgId, deleted: true } });
+});

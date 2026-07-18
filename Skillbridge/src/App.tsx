@@ -26,6 +26,7 @@ import Wallet from "@/pages/Wallet";
 import MyListings from "@/pages/MyListings";
 import OrderDetail from "@/pages/OrderDetail";
 import Messages from "@/pages/Messages";
+import VideoRoom from "@/pages/VideoRoom";
 
 import Disputes from "@/pages/Disputes";
 import DisputeDetail from "@/pages/DisputeDetail";
@@ -117,6 +118,7 @@ function App() {
               <Route path="/my-listings" element={<MyListings />} />
               <Route path="/messages" element={<Messages />} />
               <Route path="/connections" element={<Connections />} />
+              <Route path="/video-call/:roomId" element={<VideoRoom />} />
               <Route path="/disputes" element={<Disputes />} />
               <Route path="/disputes/:id" element={<DisputeDetail />} />
               <Route path="/admin" element={<AdminRedirect />} />
