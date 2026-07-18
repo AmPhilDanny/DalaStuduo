@@ -47,6 +47,7 @@ app.use(helmet({
 const ALLOWED_ORIGINS = [
   /^https?:\/\/localhost:(3000|4000)$/,
   'https://novaxbridgeadmin.onrender.com',
+  'https://novaxbridge.onrender.com',
   /^https:\/\/[a-zA-Z0-9-]+\.onrender\.com$/i,
 ];
 

@@ -698,3 +698,276 @@ b2bRouter.post('/verification', async (req: Request, res: Response) => {
   if (error) throw new AppError(500, error.message);
   res.status(201).json({ data });
 });
+
+// ════════════════════════════════════════
+// BILLING — PLANS, INVOICES, HISTORY
+// ════════════════════════════════════════
+
+// GET /billing/plans — list active subscription plans
+b2bRouter.get('/billing/plans', async (_req: Request, res: Response) => {
+  const { data, error } = await adminClient
+    .from('subscription_plans')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order')
+    .order('name');
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// GET /billing/invoices — current org's invoices
+b2bRouter.get('/billing/invoices', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const status = req.query.status as string | undefined;
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  try {
+    let query = adminClient
+      .from('billing_invoices')
+      .select('*', { count: 'exact' })
+      .eq('org_id', userOrg.org.id);
+
+    if (status) query = query.eq('status', status);
+
+    const { data: invoices, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      if (error.code === '42P01') {
+        return res.json({ data: [], count: 0, limit, offset });
+      }
+      throw new AppError(500, error.message);
+    }
+
+    const planIds = [...new Set((invoices || []).map((inv: any) => inv.plan_id).filter(Boolean))];
+    const planResult = planIds.length > 0
+      ? await adminClient.from('subscription_plans').select('id, name, slug').in('id', planIds)
+      : { data: [] };
+    const planMap = new Map((planResult.data || []).map((p: any) => [p.id, { name: p.name, slug: p.slug }]));
+
+    const data = (invoices || []).map((inv: any) => ({
+      ...inv,
+      plan: planMap.get(inv.plan_id) || null,
+    }));
+
+    res.json({ data, count, limit, offset });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    res.json({ data: [], count: 0, limit, offset });
+  }
+});
+
+// GET /billing/history — current org's billing history
+b2bRouter.get('/billing/history', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  try {
+    let query = adminClient
+      .from('billing_history')
+      .select('*', { count: 'exact' })
+      .eq('org_id', userOrg.org.id);
+
+    const { data: history, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      if (error.code === '42P01') {
+        return res.json({ data: [], count: 0, limit, offset });
+      }
+      throw new AppError(500, error.message);
+    }
+
+    const planIds = [...new Set([...(history || []).map((h: any) => h.from_plan_id), ...(history || []).map((h: any) => h.to_plan_id)].filter(Boolean))];
+    const userIds = [...new Set((history || []).map((h: any) => h.changed_by).filter(Boolean))];
+
+    const [planResult, userResult] = await Promise.all([
+      planIds.length > 0
+        ? adminClient.from('subscription_plans').select('id, name, slug').in('id', planIds)
+        : Promise.resolve({ data: [] }),
+      userIds.length > 0
+        ? adminClient.from('profiles').select('id, full_name, avatar_url').in('id', userIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const planMap = new Map((planResult.data || []).map((p: any) => [p.id, { name: p.name, slug: p.slug }]));
+    const userMap = new Map((userResult.data || []).map((u: any) => [u.id, { full_name: u.full_name, avatar_url: u.avatar_url }]));
+
+    const data = (history || []).map((h: any) => ({
+      ...h,
+      from_plan: planMap.get(h.from_plan_id) || null,
+      to_plan: planMap.get(h.to_plan_id) || null,
+      changed_by_user: userMap.get(h.changed_by) || null,
+    }));
+
+    res.json({ data, count, limit, offset });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    res.json({ data: [], count: 0, limit, offset });
+  }
+});
+
+// ════════════════════════════════════════
+// ANALYTICS — ORG OVERVIEW
+// ════════════════════════════════════════
+
+// GET /analytics/overview — org-level analytics
+b2bRouter.get('/analytics/overview', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+  const orgId = userOrg.org.id;
+
+  try {
+    const [
+      contractsResult,
+      pipelineResult,
+      jobsResult,
+      membersResult,
+      talentListsResult,
+      savedSearchesResult,
+      savedTalentResult,
+    ] = await Promise.all([
+      adminClient.from('contracts').select('status, total_value, created_at').eq('org_id', orgId),
+      adminClient.from('job_applications').select('status, jobs!inner(org_id)').eq('jobs.org_id', orgId),
+      adminClient.from('jobs').select('id', { count: 'exact', head: true }).eq('org_id', orgId).eq('is_active', true),
+      adminClient.from('org_members').select('role', { count: 'exact' }).eq('org_id', orgId),
+      adminClient.from('talent_lists').select('id', { count: 'exact', head: true }).eq('org_id', orgId),
+      adminClient.from('saved_searches').select('id', { count: 'exact', head: true }).eq('org_id', orgId),
+      adminClient.from('saved_talent').select('id, list_id', { count: 'exact' })
+        .in('list_id', adminClient.from('talent_lists').select('id').eq('org_id', orgId) as any),
+    ]);
+
+    const contracts = contractsResult.data || [];
+    const totalContracts = contracts.length;
+    const totalValue = contracts.reduce((sum: number, c: any) => sum + (c.total_value || 0), 0);
+    const byStatus: Record<string, number> = {};
+    const monthlyValue: Record<string, number> = {};
+    for (const c of contracts) {
+      byStatus[c.status] = (byStatus[c.status] || 0) + 1;
+      if (c.created_at) {
+        const month = c.created_at.substring(0, 7);
+        monthlyValue[month] = (monthlyValue[month] || 0) + (c.total_value || 0);
+      }
+    }
+
+    const pipelineData = pipelineResult.data || [];
+    const pipelineByStatus: Record<string, number> = {};
+    for (const a of pipelineData) {
+      pipelineByStatus[a.status] = (pipelineByStatus[a.status] || 0) + 1;
+    }
+
+    const membersData = membersResult.data || [];
+    const teamByRole: Record<string, number> = {};
+    for (const m of membersData) {
+      teamByRole[m.role] = (teamByRole[m.role] || 0) + 1;
+    }
+
+    const analytics = {
+      contracts: {
+        total: totalContracts,
+        total_value: totalValue,
+        by_status: byStatus,
+        monthly_value: monthlyValue,
+      },
+      pipeline: {
+        total: pipelineData.length,
+        by_status: pipelineByStatus,
+      },
+      jobs: { active: jobsResult.count || 0 },
+      team: { total: membersData.length, by_role: teamByRole },
+      talent: {
+        saved: savedTalentResult.data?.length || 0,
+        lists: talentListsResult.count || 0,
+        saved_searches: savedSearchesResult.count || 0,
+      },
+    };
+
+    res.json(analytics);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    res.json({
+      contracts: { total: 0, total_value: 0, by_status: {}, monthly_value: {} },
+      pipeline: { total: 0, by_status: {} },
+      jobs: { active: 0 },
+      team: { total: 0, by_role: {} },
+      talent: { saved: 0, lists: 0, saved_searches: 0 },
+    });
+  }
+});
+
+// ════════════════════════════════════════
+// COMPLIANCE — REPORTS
+// ════════════════════════════════════════
+
+// GET /compliance/reports — current org's compliance reports
+b2bRouter.get('/compliance/reports', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  try {
+    const { data: reports, error, count } = await adminClient
+      .from('compliance_reports')
+      .select('*', { count: 'exact' })
+      .eq('org_id', userOrg.org.id)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      if (error.code === '42P01') {
+        return res.json({ data: [], count: 0, limit, offset });
+      }
+      throw new AppError(500, error.message);
+    }
+
+    res.json({ data: reports || [], count, limit, offset });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    res.json({ data: [], count: 0, limit, offset });
+  }
+});
+
+// POST /compliance/reports — generate a compliance report
+b2bRouter.post('/compliance/reports', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+  requireRole(userOrg.role, ORG_ADMIN_ROLES);
+
+  const { report_type } = req.body;
+  if (!report_type) throw new AppError(400, 'Report type is required');
+
+  try {
+    const { data, error } = await adminClient
+      .from('compliance_reports')
+      .insert({
+        org_id: userOrg.org.id,
+        report_type,
+        title: `${report_type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())} Report`,
+        data: {},
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '42P01') {
+        throw new AppError(404, 'Compliance reports table not available yet');
+      }
+      throw new AppError(500, error.message);
+    }
+
+    res.status(201).json({ data });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(500, 'Failed to generate compliance report');
+  }
+});
