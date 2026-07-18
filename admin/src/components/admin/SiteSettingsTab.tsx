@@ -49,7 +49,13 @@ export default function SiteSettingsTab() {
     formData.append('file', file);
     formData.append('folder', folder);
     try {
-      const res = await fetch(`${API_BASE}/admin/upload`, { method: 'POST', body: formData, credentials: 'include' });
+      const { data: sd } = await supabase.auth.getSession();
+      const token = sd.session?.access_token;
+      if (!token) { toast.error('Not authenticated'); return null; }
+      const res = await fetch(`${API_BASE}/admin/upload`, {
+        method: 'POST', body: formData,
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!res.ok) { const err = await res.json(); toast.error('Upload failed: ' + (err.error || res.statusText)); return null; }
       const json = await res.json();
       return json.data.url;
