@@ -10,11 +10,8 @@ import { toast } from 'sonner';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
-const VALID_PROVIDER_IDS = ['openrouter', 'mistral', 'openai', 'groq', 'google', 'togetherai'] as const;
-
 interface NavLink { name: string; href: string; }
 interface FooterColumn { title: string; links: NavLink[]; }
-interface AiProviderInfo { id: string; label: string; configured: boolean; active: boolean; }
 
 interface SiteConfig {
   brand: { site_name: string; tagline: string; logo_url: string; favicon_url: string };
@@ -43,13 +40,9 @@ export default function SiteSettingsTab() {
   const [uploading, setUploading] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTarget, setUploadTarget] = useState<string | null>(null);
-  const [aiProviders, setAiProviders] = useState<AiProviderInfo[]>([]);
-  const [testingAi, setTestingAi] = useState<string | null>(null);
-  const [aiTestResult, setAiTestResult] = useState<{ provider: string; ok: boolean; message: string } | null>(null);
-  const [apiKeyValues, setApiKeyValues] = useState<Record<string, string>>({});
-  const [keySaving, setKeySaving] = useState(false);
+  const VALID_PROVIDER_IDS = ['openrouter', 'mistral', 'openai', 'groq', 'google', 'togetherai'] as const;
 
-  useEffect(() => { loadConfig(); loadProviders(); loadApiKeys(); }, []);
+  useEffect(() => { loadConfig(); }, []);
 
   const uploadFile = async (file: File, targetPath: string): Promise<string | null> => {
     const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
@@ -89,87 +82,7 @@ export default function SiteSettingsTab() {
     setTimeout(() => fileInputRef.current?.click(), 0);
   };
 
-  const loadApiKeys = async () => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) return;
-      const res = await fetch(`${API_BASE}/ai/keys`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json?.data) setApiKeyValues(json.data as Record<string, string>);
-      }
-    } catch { /* ignore */ }
-  };
 
-  const saveApiKeys = async () => {
-    setKeySaving(true);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) throw new Error('Not authenticated');
-      const res = await fetch(`${API_BASE}/ai/keys`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keys: apiKeyValues }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.error || 'Failed to save API keys');
-      }
-      toast.success('API keys saved');
-      loadProviders(); // refresh configured status
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save API keys');
-    } finally {
-      setKeySaving(false);
-    }
-  };
-
-  const loadProviders = async () => {
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) return;
-      const res = await fetch(`${API_BASE}/ai/providers`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json?.data) setAiProviders(json.data as AiProviderInfo[]);
-      }
-    } catch { /* ignore */ }
-  };
-
-  const testAiProvider = async (providerId: string) => {
-    if (!providerId || !VALID_PROVIDER_IDS.includes(providerId as any)) {
-      setAiTestResult({ provider: providerId, ok: false, message: 'Select a valid preferred provider first' });
-      return;
-    }
-    setTestingAi(providerId);
-    setAiTestResult(null);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      const res = await fetch(`${API_BASE}/ai/test`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: providerId }),
-      });
-      if (res.ok) {
-        setAiTestResult({ provider: providerId, ok: true, message: 'API key is working' });
-      } else {
-        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        setAiTestResult({ provider: providerId, ok: false, message: err.error || 'Test failed' });
-      }
-    } catch (err) {
-      setAiTestResult({ provider: providerId, ok: false, message: err instanceof Error ? err.message : 'Request failed' });
-    } finally {
-      setTestingAi(null);
-    }
-  };
 
   const loadConfig = async () => {
     setLoading(true);
@@ -429,76 +342,6 @@ export default function SiteSettingsTab() {
             <div className="col-span-2 space-y-1.5"><Label>Keywords</Label><Input value={config.meta.keywords} onChange={(e) => update('meta', { ...config.meta, keywords: e.target.value })} placeholder="keyword1, keyword2" /></div>
             <div className="space-y-1.5"><Label>OG Image URL</Label><Input value={config.meta.og_image_url} onChange={(e) => update('meta', { ...config.meta, og_image_url: e.target.value })} placeholder="https://..." /></div>
             <div className="space-y-1.5"><Label>Theme Color</Label><Input value={config.meta.theme_color} onChange={(e) => update('meta', { ...config.meta, theme_color: e.target.value })} placeholder="#ffffff" /></div>
-          </div>
-        </section>
-
-        {/* ── AI Settings ── */}
-        <section className="space-y-4">
-          <h3 className="text-lg font-semibold border-b pb-2">AI Settings</h3>
-
-          {/* API Key Inputs */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Provider API Keys</Label>
-            {aiProviders.length === 0 && <p className="text-sm text-muted-foreground">Loading providers...</p>}
-            {aiProviders.map((p) => (
-              <div key={p.id} className="flex items-center gap-2">
-                <Label className="w-28 shrink-0 text-sm">{p.label}</Label>
-                <Input
-                  type="password"
-                  placeholder={apiKeyValues[p.id] ? '•••••••• (key stored)' : `Enter ${p.label} API key`}
-                  value={apiKeyValues[p.id] || ''}
-                  onChange={(e) => setApiKeyValues((prev) => ({ ...prev, [p.id]: e.target.value }))}
-                  className="flex-1"
-                />
-              </div>
-            ))}
-            <Button
-              size="sm"
-              onClick={saveApiKeys}
-              disabled={keySaving}
-              className="gap-1.5"
-            >
-              {keySaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-              {keySaving ? 'Saving Keys...' : 'Save API Keys'}
-            </Button>
-          </div>
-
-          {/* Preferred Provider & Test */}
-          <div className="space-y-3 pt-2">
-            <div className="space-y-1.5">
-              <Label>Preferred AI Provider</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                value={config.api_keys.preferred}
-                onChange={(e) => update('api_keys', { ...config.api_keys, preferred: e.target.value })}
-              >
-                <option value="">— Select provider —</option>
-                {aiProviders.map((p) => (
-                  <option key={p.id} value={p.id} disabled={!p.configured}>
-                    {p.label} {p.configured ? '' : '(not configured)'} {p.active ? '(active)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-end gap-3">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => testAiProvider(config.api_keys.preferred)}
-                disabled={!config.api_keys.preferred || testingAi !== null}
-                className="gap-1.5"
-              >
-                {testingAi ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                {testingAi ? 'Testing...' : 'Test API Key'}
-              </Button>
-              {aiTestResult && (
-                <span className={`flex items-center gap-1 text-sm ${aiTestResult.ok ? 'text-green-600' : 'text-red-600'}`}>
-                  {aiTestResult.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                  {aiTestResult.message}
-                </span>
-              )}
-            </div>
           </div>
         </section>
 

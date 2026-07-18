@@ -141,14 +141,16 @@ export default function AdminDashboard() {
   const [processingPayout, setProcessingPayout] = useState(false);
 
   // AI Settings
-  const [aiKeys, setAiKeys] = useState<Record<string, string>>({
-    ai_openrouter_key: '',
-    ai_mistral_key: '',
-    ai_openai_key: '',
-    ai_groq_key: '',
-    ai_google_key: '',
-    ai_togetherai_key: '',
-  });
+  const AI_PROVIDER_META: Record<string, { label: string; defaultModel: string; }> = {
+    openrouter: { label: 'OpenRouter', defaultModel: 'google/gemini-2.0-flash-001' },
+    mistral: { label: 'Mistral AI', defaultModel: 'mistral-large-latest' },
+    openai: { label: 'OpenAI', defaultModel: 'gpt-4o-mini' },
+    groq: { label: 'Groq', defaultModel: 'llama-3.3-70b-versatile' },
+    google: { label: 'Google Gemini', defaultModel: 'gemini-2.0-flash' },
+    togetherai: { label: 'Together AI', defaultModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo' },
+  };
+  const [aiKeys, setAiKeys] = useState<Record<string, string>>({});
+  const [aiModels, setAiModels] = useState<Record<string, string>>({});
   const [preferredProvider, setPreferredProvider] = useState('');
   const [aiProviderStatus, setAiProviderStatus] = useState<Record<string, { configured: boolean; active: boolean }>>({});
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
@@ -262,15 +264,6 @@ export default function AdminDashboard() {
   const [disputedOrders, setDisputedOrders] = useState<AdminOrder[]>([]);
   const [resolvingDispute, setResolvingDispute] = useState<string | null>(null);
   const [disputeAction, setDisputeAction] = useState<'refund' | 'release' | null>(null);
-
-  const AI_PROVIDER_LABELS: Record<string, string> = {
-    ai_openrouter_key: 'OpenRouter',
-    ai_mistral_key: 'Mistral AI',
-    ai_openai_key: 'OpenAI',
-    ai_groq_key: 'Groq',
-    ai_google_key: 'Google Gemini',
-    ai_togetherai_key: 'Together AI',
-  };
 
   const isAdminAccess = Boolean(
     user && (
@@ -456,21 +449,20 @@ export default function AdminDashboard() {
   const loadAiKeys = async () => {
     setLoadingKeys(true);
     try {
-      const [settingsResult, providersResult] = await Promise.all([
-        get<Record<string, unknown>>('/admin/settings'),
+      const [keysResult, modelsResult, providersResult, settingsResult] = await Promise.all([
+        get<Record<string, string>>('/ai/keys'),
+        get<Record<string, string>>('/ai/models').catch(() => ({ data: {} as Record<string, string> })),
         get<{ id: string; label: string; configured: boolean; active: boolean }[]>('/ai/providers'),
+        get<Record<string, unknown>>('/admin/settings'),
       ]);
 
-      // Load API keys from settings
-      const settings = settingsResult.data || {};
-      setAiKeys((prev) => {
-        const next = { ...prev };
-        for (const key of Object.keys(prev)) {
-          const v = settings[key] as Record<string, unknown> | null;
-          if (v?.api_key) next[key] = String(v.api_key);
-        }
-        return next;
-      });
+      // Load API keys from /ai/keys
+      const keysData = keysResult.data || {};
+      setAiKeys(keysData);
+
+      // Load model overrides from /ai/models
+      const modelsData = modelsResult.data || {};
+      setAiModels(modelsData);
 
       // Load provider status
       const providers = providersResult.data || [];
@@ -481,7 +473,8 @@ export default function AdminDashboard() {
       setAiProviderStatus(statusMap);
 
       // Load preferred provider from site_config
-      const siteCfgValue = settings.site_config as Record<string, unknown> | null;
+      const siteSettings = settingsResult.data || {};
+      const siteCfgValue = siteSettings.site_config as Record<string, unknown> | null;
       const apiKeysConfig = siteCfgValue?.api_keys as Record<string, unknown> || {};
       setPreferredProvider(String(apiKeysConfig.preferred || ''));
     } catch (err) {
@@ -1006,23 +999,48 @@ export default function AdminDashboard() {
   const saveAiKeys = async () => {
     setSavingKeys(true);
     try {
-      const settings: Record<string, unknown> = {};
-      for (const [key, apiKey] of Object.entries(aiKeys)) {
-        settings[key] = { api_key: apiKey };
+      // Save API keys via /ai/keys endpoint
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
+
+      const keysRes = await fetch(`${baseUrl}/ai/keys`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keys: aiKeys }),
+      });
+      if (!keysRes.ok) {
+        const err = await keysRes.json().catch(() => null);
+        throw new Error(err?.error || 'Failed to save API keys');
       }
+
+      // Save model overrides via /ai/models endpoint
+      const modelsRes = await fetch(`${baseUrl}/ai/models`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ models: aiModels }),
+      });
+      if (!modelsRes.ok) {
+        const err = await modelsRes.json().catch(() => null);
+        throw new Error(err?.error || 'Failed to save AI models');
+      }
+
       // Save preferred provider to site_config
       const result = await get<Record<string, unknown>>('/admin/settings');
       const siteSettings = result.data || {};
       const existingConfig = (siteSettings.site_config as Record<string, unknown>) || {};
-      settings.site_config = {
-        ...existingConfig,
-        api_keys: { ...((existingConfig.api_keys as Record<string, unknown>) || {}), preferred: preferredProvider },
-      };
+      await patch('/admin/settings', {
+        key: 'site_config',
+        value: {
+          ...existingConfig,
+          api_keys: { ...((existingConfig.api_keys as Record<string, unknown>) || {}), preferred: preferredProvider },
+        },
+      });
 
-      await patch('/admin/settings/batch', { settings });
-      toast.success('API keys saved. Changes apply on next edge function cold start.');
+      toast.success('AI settings saved');
+      loadAiKeys(); // refresh
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save API keys');
+      toast.error(error instanceof Error ? error.message : 'Failed to save AI settings');
     } finally {
       setSavingKeys(false);
     }
@@ -1615,7 +1633,7 @@ export default function AdminDashboard() {
               <CardHeader><CardTitle className="flex items-center gap-2"><Key className="w-5 h-5 text-secondary" /> AI Provider Configuration</CardTitle></CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground mb-6">
-                  Configure API keys for AI providers. Select your preferred provider below. Use the test button to verify each key.
+                  Configure API keys and models for AI providers. Select your preferred provider below. Use the test button to verify each key.
                 </p>
 
                 {loadingKeys ? (
@@ -1631,11 +1649,11 @@ export default function AdminDashboard() {
                         onChange={(e) => setPreferredProvider(e.target.value)}
                       >
                         <option value="">— Select preferred provider —</option>
-                        {Object.entries(AI_PROVIDER_LABELS).map(([key, label]) => {
+                        {Object.entries(AI_PROVIDER_META).map(([key, meta]) => {
                           const status = aiProviderStatus[key];
                           return (
                             <option key={key} value={key}>
-                              {label} {status ? (status.configured ? '(configured)' : '(no key)') : ''}
+                              {meta.label} {status ? (status.configured ? '(configured)' : '(no key)') : ''}
                             </option>
                           );
                         })}
@@ -1648,15 +1666,15 @@ export default function AdminDashboard() {
                       </p>
                     </div>
 
-                    {/* API key inputs */}
-                    {Object.entries(AI_PROVIDER_LABELS).map(([key, label]) => {
+                    {/* Provider cards: key + model inputs */}
+                    {Object.entries(AI_PROVIDER_META).map(([key, meta]) => {
                       const testResult = testResults[key];
                       const status = aiProviderStatus[key];
                       return (
-                        <div key={key} className="space-y-1.5 p-3 border rounded-lg">
+                        <div key={key} className="space-y-2 p-3 border rounded-lg">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <Label className="text-sm font-medium">{label}</Label>
+                              <Label className="text-sm font-medium">{meta.label}</Label>
                               {status?.active && (
                                 <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">active</span>
                               )}
@@ -1709,15 +1727,27 @@ export default function AdminDashboard() {
                           </div>
                           <Input
                             type="password"
-                            placeholder={`${label} API key...`}
-                            value={aiKeys[key]}
+                            placeholder={`${meta.label} API key...`}
+                            value={aiKeys[key] || ''}
                             onChange={(e) => {
                               setAiKeys((prev) => ({ ...prev, [key]: e.target.value }));
-                              // Clear previous test result when key changes
                               if (testResults[key]) setTestResults((prev) => { const n = { ...prev }; delete n[key]; return n; });
                             }}
                             className="flex-1 font-mono text-xs"
                           />
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs text-muted-foreground shrink-0 w-12">Model</Label>
+                            <Input
+                              type="text"
+                              placeholder={meta.defaultModel}
+                              value={(aiModels[key] ?? '')}
+                              onChange={(e) => setAiModels((prev) => ({ ...prev, [key]: e.target.value }))}
+                              className="flex-1 font-mono text-xs"
+                            />
+                            {(!aiModels[key]) && (
+                              <span className="text-[10px] text-muted-foreground shrink-0">default: {meta.defaultModel}</span>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
