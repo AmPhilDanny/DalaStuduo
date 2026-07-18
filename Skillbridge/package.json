@@ -11,8 +11,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "build:watch": "vite build --watch > build.log 2>&1",
     "watch:errors": "node dala-internal-watch-build-errors.js",
-    "preview:dev": "concurrently \"npm run watch:errors\"",
-    "serve": "serve -s dist -l $PORT"
+    "preview:dev": "concurrently \"npm run watch:errors\""
   },
   "packageManager": "bun@1.2.22",
   "dependencies": {
@@ -102,7 +101,6 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.44.0",
     "vite": "^5.4.11",
-    "vite-plugin-checker": "^0.10.3",
-    "serve": "^14.2.4"
+    "vite-plugin-checker": "^0.10.3"
   }
 }

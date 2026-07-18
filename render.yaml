@@ -1,11 +1,11 @@
 services:
-  # ── Express API server (serves both API and Skillbridge frontend) ──
+  # ── Express API server ──
   - type: web
     name: skillbridge-api
     runtime: node
-    rootDir: .
-    buildCommand: cd Skillbridge && npm install && npm run build && cd ../server && npm install && npm run build
-    startCommand: cd server && node dist/index.js
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -21,35 +21,3 @@ services:
         sync: false
       - key: FLUTTERWAVE_SECRET_KEY
         sync: false
-
-  # ── Main frontend ──
-  - type: web
-    name: skillbridge
-    runtime: node
-    rootDir: Skillbridge
-    buildCommand: npm install && npm run build
-    startCommand: npm run serve
-    envVars:
-      - key: VITE_SUPABASE_URL
-        sync: false
-      - key: VITE_SUPABASE_ANON_KEY
-        sync: false
-      - key: VITE_API_URL
-        value: https://dalastudioshowcase.onrender.com/api
-
-  # ── Admin dashboard ──
-  - type: web
-    name: skillbridge-admin
-    runtime: node
-    rootDir: admin
-    buildCommand: npm install && npm run build
-    startCommand: npm run serve
-    envVars:
-      - key: VITE_SUPABASE_URL
-        sync: false
-      - key: VITE_SUPABASE_ANON_KEY
-        sync: false
-      - key: VITE_API_URL
-        value: https://dalastudioshowcase.onrender.com/api
-      - key: VITE_MAIN_SITE_URL
-        value: https://novaxbridge.onrender.com
