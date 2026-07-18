@@ -5,8 +5,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Building2, Users, Briefcase, Eye, Plus, ArrowRight, Settings, FileText, Search, ShieldCheck } from 'lucide-react';
+import { Loader2, Building2, Users, Briefcase, Eye, Plus, ArrowRight, Settings, FileText, Search, ShieldCheck, CreditCard, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import { getVerification } from '@/b2b/lib/api';
+import { useSubscription } from '@/b2b/hooks/useSubscription';
+import type { OrgVerification } from '@/b2b/lib/api';
 
 interface OrgJob {
   id: string;
@@ -38,9 +41,12 @@ const STATUS_STYLES: Record<string, string> = {
 
 export default function OrgDashboard() {
   const { user, profile } = useAuth();
+  const { plan: currentPlan, subscription } = useSubscription();
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<OrgJob[]>([]);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
+  const [verification, setVerification] = useState<OrgVerification | null>(null);
+  const [verificationLoading, setVerificationLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
@@ -70,6 +76,21 @@ export default function OrgDashboard() {
   };
 
     fetchDashboardData();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchVerificationStatus = async () => {
+      try {
+        const res = await getVerification();
+        setVerification(res.data);
+      } catch {
+        // no verification exists yet
+      } finally {
+        setVerificationLoading(false);
+      }
+    };
+    fetchVerificationStatus();
   }, [user]);
 
   if (!user) {
@@ -242,6 +263,59 @@ export default function OrgDashboard() {
                   <ShieldCheck className="w-4 h-4 mr-2" />
                   Organization Verification
                 </Button>
+              </CardContent>
+            </Card>
+
+            {/* Subscription Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-secondary" />
+                  Subscription
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-muted-foreground">Current plan</span>
+                  <Badge variant="secondary" className="text-xs">
+                    {currentPlan?.name || 'Free'}
+                  </Badge>
+                </div>
+                {subscription?.status === 'expired' && (
+                  <p className="text-xs text-red-500 mb-2">Subscription expired</p>
+                )}
+                <Button variant="link" className="px-0 mt-1" onClick={() => navigate('/b2b/settings')}>
+                  Manage Plan
+                  <ArrowRight className="w-3 h-3 ml-1" />
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Verification Status Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-secondary" />
+                  Verification
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {verificationLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-secondary" />
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-muted-foreground">Status</span>
+                      <Badge variant={verification?.status === 'verified' ? 'default' : verification?.status === 'rejected' ? 'destructive' : 'secondary'} className="text-xs">
+                        {verification?.status === 'verified' ? 'Verified' : verification?.status === 'pending' ? 'Pending' : verification?.status === 'rejected' ? 'Rejected' : 'Not Submitted'}
+                      </Badge>
+                    </div>
+                    <Button variant="link" className="px-0 mt-1" onClick={() => navigate('/b2b/compliance')}>
+                      {verification?.status === 'verified' ? 'View Details' : verification?.status === 'pending' ? 'Check Status' : 'Apply for Verification'}
+                      <ArrowRight className="w-3 h-3 ml-1" />
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
 
