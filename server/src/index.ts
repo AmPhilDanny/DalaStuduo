@@ -2,9 +2,12 @@ import 'dotenv/config';
 import express, { Express } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { Server } from 'socket.io';
 import pino from 'pino';
+import fs from 'node:fs';
 import { errorHandler } from './middleware/error.js';
 import { requireAuth, optionalAuth } from './middleware/auth.js';
 import { adminClient } from './lib/supabase-admin.js';
@@ -22,6 +25,9 @@ import { webhooksRouter } from './routes/webhooks/index.js';
 import { emailRouter } from './routes/email/index.js';
 import { githubRouter } from './routes/github/index.js';
 import { setupVideoCallSignaling, videoCallRouter } from './routes/video-call/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const logger = pino({ name: 'skillbridge-server' });
 const app: Express = express();
@@ -121,6 +127,25 @@ app.use('/api/admin', requireAuth, adminRouter);
 
 // ── Video Call Admin Routes (auth + admin role) ──
 app.use('/api/video-call', videoCallRouter);
+
+// ── Serve Skillbridge frontend (built to ../Skillbridge/dist/) ──
+const frontendDist = path.resolve(__dirname, '..', '..', 'Skillbridge', 'dist');
+if (fs.existsSync(frontendDist)) {
+  logger.info({ dir: frontendDist }, 'Serving Skillbridge frontend from');
+
+  app.use(express.static(frontendDist));
+
+  // SPA catch-all: serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/')) {
+      res.status(404).json({ error: 'API endpoint not found' });
+      return;
+    }
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+} else {
+  logger.warn({ dir: frontendDist }, 'Skillbridge frontend dist not found — not serving frontend');
+}
 
 // ── Error Handler ──
 app.use(errorHandler);
