@@ -122,6 +122,75 @@ adminRouter.patch('/users/:id/confirm-email', async (req: Request, res: Response
   res.json({ data: { id: result.id, email: result.email, email_confirmed_at: result.email_confirmed_at } });
 });
 
+// ── GET /admin/users/:id/email-status — Check email confirmation status ──
+adminRouter.get('/users/:id/email-status', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const supabaseUrl = process.env.SUPABASE_URL!;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+  const response = await fetch(`${supabaseUrl}/auth/v1/admin/users/${id}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${serviceRole}`,
+      apikey: serviceRole,
+    },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ msg: `HTTP ${response.status}` }));
+    throw new AppError(response.status, err.msg || 'Failed to fetch email status');
+  }
+
+  const result = await response.json();
+  res.json({ data: { id: result.id, email: result.email, email_confirmed_at: result.email_confirmed_at || null } });
+});
+
+// ── POST /admin/users/:id/resend-confirmation — Resend email verification ──
+adminRouter.post('/users/:id/resend-confirmation', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const supabaseUrl = process.env.SUPABASE_URL!;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const redirectTo = (req.query.redirect_to as string) || process.env.SITE_URL || `${process.env.SUPABASE_URL}/auth/v1/verify`;
+
+  const userRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${id}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${serviceRole}`,
+      apikey: serviceRole,
+    },
+  });
+
+  if (!userRes.ok) {
+    const err = await userRes.json().catch(() => ({ msg: `HTTP ${userRes.status}` }));
+    throw new AppError(userRes.status, err.msg || 'Failed to fetch user');
+  }
+
+  const user = await userRes.json();
+  if (!user.email) throw new AppError(400, 'User has no email address');
+
+  const linkRes = await fetch(`${supabaseUrl}/auth/v1/admin/users/${id}/generate_link`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${serviceRole}`,
+      'Content-Type': 'application/json',
+      apikey: serviceRole,
+    },
+    body: JSON.stringify({
+      type: 'signup',
+      email: user.email,
+      redirect_to: redirectTo,
+    }),
+  });
+
+  if (!linkRes.ok) {
+    const err = await linkRes.json().catch(() => ({ msg: `HTTP ${linkRes.status}` }));
+    throw new AppError(linkRes.status, err.msg || 'Failed to resend confirmation');
+  }
+
+  const linkResult = await linkRes.json();
+  res.json({ data: { email: user.email, action_link: linkResult.action_link } });
+});
+
 // ── PATCH /admin/users/:id/profile ──
 adminRouter.patch('/users/:id/profile',
   validate(z.object({

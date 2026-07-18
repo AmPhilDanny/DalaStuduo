@@ -33,7 +33,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Search, Plus, Trash2, ShieldAlert, Save, X, MapPin, Building2, Globe, Tag, Calendar, Clock, User, Briefcase, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadCSV } from '@/lib/export';
-import { adminApi, patch, type AdminRole } from '@/lib/api-client';
+import { adminApi, patch, get, post, type AdminRole } from '@/lib/api-client';
 import RoleManager from './RoleManager';
 
 interface AdminProfile {
@@ -87,6 +87,9 @@ export default function UserManagementTab() {
 
   // Confirm email
   const [confirmingEmail, setConfirmingEmail] = useState(false);
+  const [resendingConfirm, setResendingConfirm] = useState(false);
+  const [emailAddress, setEmailAddress] = useState<string | null>(null);
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
 
   // Profile detail dialog
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
@@ -109,8 +112,9 @@ export default function UserManagementTab() {
   useEffect(() => { fetchUsers(); fetchRoles(); }, []);
 
   useEffect(() => {
-    if (!profileUserId) { setProfile(null); return; }
+    if (!profileUserId) { setProfile(null); setEmailAddress(null); setEmailConfirmed(false); return; }
     fetchProfile(profileUserId);
+    fetchEmailStatus(profileUserId);
   }, [profileUserId]);
 
   const fetchUsers = async () => {
@@ -168,6 +172,17 @@ export default function UserManagementTab() {
       toast.error('Failed to load profile');
       setProfileUserId(null);
     } finally { setProfileLoading(false); }
+  };
+
+  const fetchEmailStatus = async (userId: string) => {
+    try {
+      const res = await get<{ id: string; email: string | null; email_confirmed_at: string | null }>(`/admin/users/${userId}/email-status`);
+      setEmailAddress(res.data.email);
+      setEmailConfirmed(!!res.data.email_confirmed_at);
+    } catch (err) {
+      setEmailAddress(null);
+      setEmailConfirmed(false);
+    }
   };
 
   const handleSaveProfile = async () => {
@@ -604,6 +619,14 @@ export default function UserManagementTab() {
                   <Clock className="w-3.5 h-3.5" />
                   <span>Last updated: <span className="font-medium text-foreground">{new Date(profile.updated_at).toLocaleDateString()}</span></span>
                 </div>
+                {emailAddress && (
+                  <div className="flex items-center gap-2 col-span-2">
+                    <span>Email: <span className="font-medium text-foreground">{emailAddress}</span></span>
+                    <Badge variant={emailConfirmed ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
+                      {emailConfirmed ? 'Confirmed' : 'Unconfirmed'}
+                    </Badge>
+                  </div>
+                )}
               </div>
 
               <DialogFooter className="gap-2 pt-2">
@@ -617,8 +640,11 @@ export default function UserManagementTab() {
                     if (!profileUserId) return;
                     setConfirmingEmail(true);
                     try {
-                      await patch(`/admin/users/${profileUserId}/confirm-email`);
-                      toast.success('Email confirmed successfully');
+                      const result = await patch<{ id: string; email: string; email_confirmed_at: string }>(`/admin/users/${profileUserId}/confirm-email`);
+                      if (result.data.email_confirmed_at) {
+                        setEmailConfirmed(true);
+                      }
+                      toast.success('Email confirmed');
                     } catch (err) {
                       toast.error(err instanceof Error ? err.message : 'Failed to confirm email');
                     } finally {
@@ -629,8 +655,29 @@ export default function UserManagementTab() {
                   className="gap-1.5"
                 >
                   {confirmingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Confirm Email
+                  {emailConfirmed ? 'Confirmed' : 'Confirm Email'}
                 </Button>
+                {emailAddress && !emailConfirmed && (
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      if (!profileUserId) return;
+                      setResendingConfirm(true);
+                      try {
+                        await post(`/admin/users/${profileUserId}/resend-confirmation`);
+                        toast.success('Confirmation email sent');
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : 'Failed to resend confirmation');
+                      } finally {
+                        setResendingConfirm(false);
+                      }
+                    }}
+                    disabled={resendingConfirm}
+                  >
+                    {resendingConfirm ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
+                    Resend Confirmation
+                  </Button>
+                )}
                 <Button onClick={handleSaveProfile} disabled={profileSaving}>
                   {profileSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Save className="w-4 h-4 mr-1.5" />}
                   {profileSaving ? 'Saving...' : 'Save Changes'}
