@@ -104,7 +104,7 @@ adminRouter.patch('/users/:id/confirm-email', async (req: Request, res: Response
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
   const response = await fetch(`${supabaseUrl}/auth/v1/admin/users/${id}`, {
-    method: 'PATCH',
+    method: 'PUT',
     headers: {
       Authorization: `Bearer ${serviceRole}`,
       'Content-Type': 'application/json',
