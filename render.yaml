@@ -1,11 +1,11 @@
 services:
-  # ── Express API server ──
+  # ── Express API server (serves both API and Skillbridge frontend) ──
   - type: web
     name: skillbridge-api
     runtime: node
-    rootDir: server
-    buildCommand: npm install && npm run build
-    startCommand: npm start
+    rootDir: .
+    buildCommand: cd Skillbridge && npm install && npm run build && cd ../server && npm install && npm run build
+    startCommand: cd server && node dist/index.js
     envVars:
       - key: NODE_ENV
         value: production
