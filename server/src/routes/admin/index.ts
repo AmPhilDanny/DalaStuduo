@@ -982,6 +982,26 @@ adminRouter.patch('/verifications/:id/review',
         .eq('id', existing.org_id);
     }
 
+    // Notify org members
+    const { data: members } = await adminClient
+      .from('org_members')
+      .select('user_id')
+      .eq('org_id', existing.org_id);
+
+    if (members && members.length > 0) {
+      const notifications = members.map((m: any) => ({
+        profile_id: m.user_id,
+        title: status === 'verified' ? 'Organization Verified' : 'Verification Rejected',
+        message: status === 'verified'
+          ? 'Your organization has been verified successfully. You now have access to all platform features.'
+          : `Your organization verification was not approved.${notes ? ` Reason: ${notes}` : ''}`,
+        type: 'system' as const,
+      }));
+      for (const n of notifications) {
+        await adminClient.from('notifications').insert(n).maybeSingle();
+      }
+    }
+
     res.json({ data });
   }
 );

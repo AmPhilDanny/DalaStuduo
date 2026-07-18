@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
 import { adminClient } from '../../lib/supabase-admin.js';
 import { AppError } from '../../middleware/error.js';
 import { requirePermission } from '../../middleware/auth.js';
+
+const verificationUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 export const b2bRouter: Router = Router();
 
@@ -116,11 +119,27 @@ b2bRouter.get('/org/members', async (req: Request, res: Response) => {
 
   const { data: members, error } = await adminClient
     .from('org_members')
-    .select('id, role, title, joined_at, created_at, user:user_id(id, full_name, avatar_url, email, role)')
+    .select('id, role, user_id, title, joined_at, created_at')
     .eq('org_id', userOrg.org.id)
     .order('joined_at');
   if (error) throw new AppError(500, error.message);
-  res.json({ data: members });
+
+  // Fetch user profiles separately (no FK relationship on user_id in schema)
+  if (members && members.length > 0) {
+    const userIds = members.map(m => m.user_id);
+    const { data: profiles } = await adminClient
+      .from('profiles')
+      .select('id, full_name, avatar_url, email, role')
+      .in('id', userIds);
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+    const enriched = members.map(m => ({
+      ...m,
+      user: profileMap.get(m.user_id) || null,
+    }));
+    return res.json({ data: enriched });
+  }
+
+  res.json({ data: members || [] });
 });
 
 // POST /org/members/invite
@@ -583,4 +602,99 @@ b2bRouter.post('/contracts/:id/status', async (req: Request, res: Response) => {
 
   await logAudit(req.user!.id, 'contract_status_change', 'contracts', req.params.id as string, { new_status: newStatus });
   res.json({ data });
+});
+
+// ════════════════════════════════════════
+// ORG VERIFICATION
+// ════════════════════════════════════════
+
+// POST /verification/upload — upload a verification document
+b2bRouter.post('/verification/upload', verificationUpload.single('file'), async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+  requireRole(userOrg.role, ORG_ADMIN_ROLES);
+
+  const f = (req as any).file as { originalname: string; buffer: Buffer; mimetype: string } | undefined;
+  if (!f) throw new AppError(400, 'No file provided');
+
+  const fileName = `${Date.now()}-${f.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+  const filePath = `verifications/${userOrg.org.id}/${fileName}`;
+
+  const { error: uploadError } = await adminClient.storage.from('org-documents').upload(filePath, f.buffer, {
+    contentType: f.mimetype,
+    upsert: true,
+  });
+
+  if (uploadError) {
+    // Fallback to site-assets bucket if org-documents doesn't exist
+    const { error: uploadError2, data } = await adminClient.storage.from('site-assets').upload(filePath, f.buffer, {
+      contentType: f.mimetype,
+      upsert: true,
+    });
+    if (uploadError2) throw new AppError(500, uploadError2.message);
+    const { data: urlData } = adminClient.storage.from('site-assets').getPublicUrl(filePath);
+    return res.json({ data: { url: urlData?.publicUrl || null, path: filePath } });
+  }
+
+  const { data: urlData } = adminClient.storage.from('org-documents').getPublicUrl(filePath);
+  res.json({ data: { url: urlData?.publicUrl || null, path: filePath } });
+});
+
+// GET /verification — get current org's verification status
+b2bRouter.get('/verification', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const { data, error } = await adminClient
+    .from('org_verifications')
+    .select('*')
+    .eq('org_id', userOrg.org.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === '42P01') {
+      return res.json({ data: null });
+    }
+    throw new AppError(500, error.message);
+  }
+
+  res.json({ data: data || null });
+});
+
+// POST /verification — submit a verification request
+b2bRouter.post('/verification', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+  requireRole(userOrg.role, ORG_ADMIN_ROLES);
+
+  const { business_name, registration_number, tax_id, document_urls } = req.body;
+  if (!business_name) throw new AppError(400, 'Business name is required');
+
+  // Check for existing pending verification
+  const { data: existing } = await adminClient
+    .from('org_verifications')
+    .select('id, status')
+    .eq('org_id', userOrg.org.id)
+    .eq('status', 'pending')
+    .maybeSingle();
+
+  if (existing) throw new AppError(409, 'A pending verification request already exists');
+
+  const { data, error } = await adminClient
+    .from('org_verifications')
+    .insert({
+      org_id: userOrg.org.id,
+      business_name,
+      registration_number: registration_number || null,
+      tax_id: tax_id || null,
+      document_urls: document_urls || [],
+      status: 'pending',
+    })
+    .select()
+    .single();
+
+  if (error) throw new AppError(500, error.message);
+  res.status(201).json({ data });
 });
