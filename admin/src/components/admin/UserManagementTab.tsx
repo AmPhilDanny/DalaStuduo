@@ -108,11 +108,14 @@ export default function UserManagementTab() {
   const [editAvailability, setEditAvailability] = useState('');
   const [editCurrency, setEditCurrency] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+
+  const [savingEmail, setSavingEmail] = useState(false);
 
   useEffect(() => { fetchUsers(); fetchRoles(); }, []);
 
   useEffect(() => {
-    if (!profileUserId) { setProfile(null); setEmailAddress(null); setEmailConfirmed(false); return; }
+    if (!profileUserId) { setProfile(null); setEmailAddress(null); setEmailConfirmed(false); setEditEmail(''); return; }
     fetchProfile(profileUserId);
     fetchEmailStatus(profileUserId);
   }, [profileUserId]);
@@ -178,9 +181,11 @@ export default function UserManagementTab() {
     try {
       const res = await get<{ id: string; email: string | null; email_confirmed_at: string | null }>(`/admin/users/${userId}/email-status`);
       setEmailAddress(res.data.email);
+      setEditEmail(res.data.email || '');
       setEmailConfirmed(!!res.data.email_confirmed_at);
     } catch (err) {
       setEmailAddress(null);
+      setEditEmail('');
       setEmailConfirmed(false);
     }
   };
@@ -194,24 +199,19 @@ export default function UserManagementTab() {
         .map((s) => s.trim())
         .filter(Boolean);
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: editName || null,
-          role: editRole,
-          headline: editHeadline || null,
-          bio: editBio || null,
-          location: editLocation || null,
-          skills: skillsArray,
-          company_name: editCompany || null,
-          github_url: editGithub || null,
-          availability: editAvailability,
-          preferred_currency: editCurrency,
-          avatar_url: editAvatarUrl || null,
-        })
-        .eq('id', profileUserId);
-
-      if (error) throw error;
+      await adminApi.updateUserProfile(profileUserId, {
+        full_name: editName || null,
+        role: editRole,
+        headline: editHeadline || null,
+        bio: editBio || null,
+        location: editLocation || null,
+        skills: skillsArray,
+        company_name: editCompany || null,
+        github_url: editGithub || null,
+        availability: editAvailability,
+        preferred_currency: editCurrency,
+        avatar_url: editAvatarUrl || null,
+      });
 
       toast.success('Profile updated');
       setProfileUserId(null);
@@ -220,6 +220,19 @@ export default function UserManagementTab() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save profile');
     } finally { setProfileSaving(false); }
+  };
+
+  const handleSaveEmail = async () => {
+    if (!profileUserId || !editEmail) return;
+    setSavingEmail(true);
+    try {
+      const res = await patch<{ id: string; email: string; email_confirmed_at: string | null }>(`/admin/users/${profileUserId}/email`, { email: editEmail });
+      setEmailAddress(res.data.email);
+      setEmailConfirmed(!!res.data.email_confirmed_at);
+      toast.success('Email updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update email');
+    } finally { setSavingEmail(false); }
   };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
@@ -274,12 +287,7 @@ export default function UserManagementTab() {
     if (!deletingId) return;
     setDeleting(true);
     try {
-      // Soft-delete: mark as inactive/disabled by clearing name and setting role
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: 'student', headline: null, full_name: '[deactivated]' })
-        .eq('id', deletingId);
-      if (error) throw error;
+      await patch(`/admin/users/${deletingId}/deactivate`);
       toast.success('User deactivated');
       setDeletingId(null);
       fetchUsers();
@@ -619,14 +627,30 @@ export default function UserManagementTab() {
                   <Clock className="w-3.5 h-3.5" />
                   <span>Last updated: <span className="font-medium text-foreground">{new Date(profile.updated_at).toLocaleDateString()}</span></span>
                 </div>
-                {emailAddress && (
-                  <div className="flex items-center gap-2 col-span-2">
-                    <span>Email: <span className="font-medium text-foreground">{emailAddress}</span></span>
-                    <Badge variant={emailConfirmed ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
-                      {emailConfirmed ? 'Confirmed' : 'Unconfirmed'}
-                    </Badge>
+                <div className="flex items-center gap-2 col-span-2">
+                  <div className="flex-1 space-y-1.5">
+                    <Label className="flex items-center gap-1.5">Email</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                        placeholder="user@example.com"
+                        className="font-mono text-xs flex-1"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleSaveEmail}
+                        disabled={savingEmail || !editEmail || editEmail === emailAddress}
+                      >
+                        {savingEmail ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                      </Button>
+                    </div>
                   </div>
-                )}
+                  <Badge variant={emailConfirmed ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0 mt-5">
+                    {emailConfirmed ? 'Confirmed' : 'Unconfirmed'}
+                  </Badge>
+                </div>
               </div>
 
               <DialogFooter className="gap-2 pt-2">

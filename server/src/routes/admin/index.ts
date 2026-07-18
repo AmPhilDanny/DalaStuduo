@@ -195,13 +195,24 @@ adminRouter.post('/users/:id/resend-confirmation', async (req: Request, res: Res
 adminRouter.patch('/users/:id/profile',
   validate(z.object({
     full_name: z.string().optional(),
+    headline: z.string().optional(),
+    bio: z.string().optional(),
+    role: z.string().optional(),
+    location: z.string().optional(),
     company_name: z.string().optional(),
     avatar_url: z.string().optional(),
-    bio: z.string().optional(),
+    github_url: z.string().optional(),
+    availability: z.string().optional(),
+    preferred_currency: z.string().optional(),
+    skills: z.array(z.string()).optional(),
   })),
   async (req: Request, res: Response) => {
     const { id } = req.params;
-    const allowedFields = ['full_name', 'company_name', 'avatar_url', 'bio'];
+    const allowedFields = [
+      'full_name', 'headline', 'bio', 'role', 'location',
+      'company_name', 'avatar_url', 'github_url',
+      'availability', 'preferred_currency', 'skills',
+    ];
     const updates: Record<string, unknown> = {};
     for (const field of allowedFields) {
       if ((req.body as any)[field] !== undefined) updates[field] = (req.body as any)[field];
@@ -221,6 +232,48 @@ adminRouter.patch('/users/:id/profile',
     res.json({ data });
   }
 );
+
+// ── PATCH /admin/users/:id/email — Admin updates user email ──
+adminRouter.patch('/users/:id/email',
+  validate(z.object({ email: z.string().email() })),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { email } = req.body;
+    const supabaseUrl = process.env.SUPABASE_URL!;
+    const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+    const response = await fetch(`${supabaseUrl}/auth/v1/admin/users/${id}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${serviceRole}`,
+        'Content-Type': 'application/json',
+        apikey: serviceRole,
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ msg: `HTTP ${response.status}` }));
+      throw new AppError(response.status, err.msg || 'Failed to update email');
+    }
+
+    const result = await response.json();
+    res.json({ data: { id: result.id, email: result.email, email_confirmed_at: result.email_confirmed_at || null } });
+  }
+);
+
+// ── PATCH /admin/users/:id/deactivate — Soft-delete a user ──
+adminRouter.patch('/users/:id/deactivate', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { data, error } = await adminClient
+    .from('profiles')
+    .update({ role: 'student', headline: null, full_name: '[deactivated]', updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
 
 // ── GET /admin/services ──
 adminRouter.get('/services', async (_req: Request, res: Response) => {
