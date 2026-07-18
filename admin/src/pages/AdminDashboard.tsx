@@ -162,13 +162,19 @@ export default function AdminDashboard() {
   const [paymentGateways, setPaymentGateways] = useState<Record<string, { public_key: string; secret_key: string; enabled: boolean }>>({});
   const [savingPaymentConfig, setSavingPaymentConfig] = useState(false);
   const [loadingPaymentConfig, setLoadingPaymentConfig] = useState(false);
-
   // Offline Payment config
   const [offlinePayment, setOfflinePayment] = useState({
-    enabled: false, bank_name: '', account_number: '', account_name: '', routing_number: '', swift_code: '', instructions: '',
+    enabled: false, bank_name: '', account_number: '', account_name: '',
+    routing_number: '', swift_code: '', instructions: '',
   });
   const [savingOfflinePayment, setSavingOfflinePayment] = useState(false);
   const [loadingOfflinePayment, setLoadingOfflinePayment] = useState(false);
+
+  // Exchange rates
+  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
+  const [ratesBaseCurrency, setRatesBaseCurrency] = useState('NGN');
+  const [loadingRates, setLoadingRates] = useState(false);
+  const [savingRates, setSavingRates] = useState(false);
 
   // Manual Payments
   const [manualPayments, setManualPayments] = useState<ManualPayment[]>([]);
@@ -340,6 +346,7 @@ export default function AdminDashboard() {
       loadServiceFee();
       loadDisputes();
       loadOfflinePaymentConfig();
+      loadExchangeRates();
       loadManualPayments();
       loadListings();
       loadProjects();
@@ -659,26 +666,19 @@ export default function AdminDashboard() {
   const loadOfflinePaymentConfig = async () => {
     setLoadingOfflinePayment(true);
     try {
-      const { data: sd } = await supabase.auth.getSession();
-      const token = sd.session?.access_token;
-      if (!token) return;
-      const url = import.meta.env.VITE_SUPABASE_URL;
-      const res = await fetch(`${url}/functions/v1/marketplace-payments/payments/offline-config`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.data) {
-          setOfflinePayment({
-            enabled: json.data.enabled ?? false,
-            bank_name: json.data.bank_name || '',
-            account_number: json.data.account_number || '',
-            account_name: json.data.account_name || '',
-            routing_number: json.data.routing_number || '',
-            swift_code: json.data.swift_code || '',
-            instructions: json.data.instructions || '',
-          });
-        }
+      const result = await get<Record<string, unknown>>('/admin/settings');
+      const settings = result.data || {};
+      const val = settings.offline_payment as Record<string, unknown> | null;
+      if (val) {
+        setOfflinePayment({
+          enabled: (val.enabled as boolean) ?? false,
+          bank_name: (val.bank_name as string) || '',
+          account_number: (val.account_number as string) || '',
+          account_name: (val.account_name as string) || '',
+          routing_number: (val.routing_number as string) || '',
+          swift_code: (val.swift_code as string) || '',
+          instructions: (val.instructions as string) || '',
+        });
       }
     } catch (err) {
       console.warn('Failed to load offline payment config:', err);
@@ -690,21 +690,41 @@ export default function AdminDashboard() {
   const saveOfflinePaymentConfig = async () => {
     setSavingOfflinePayment(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) throw new Error('Not authenticated');
-      const url = import.meta.env.VITE_SUPABASE_URL;
-      const res = await fetch(`${url}/functions/v1/admin-api/admin/settings`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'offline_payment', value: offlinePayment }),
-      });
-      if (!res.ok) throw new Error('Failed to save');
+      await patch('/admin/settings', { key: 'offline_payment', value: offlinePayment });
       toast.success('Offline payment config saved');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save');
     } finally {
       setSavingOfflinePayment(false);
+    }
+  };
+
+  const loadExchangeRates = async () => {
+    setLoadingRates(true);
+    try {
+      const result = await get<{ base: string; rates: Record<string, number> }>('/payments/rates');
+      const d = result.data;
+      setRatesBaseCurrency(d.base || 'NGN');
+      setExchangeRates(d.rates || {});
+    } catch (err) {
+      console.warn('Failed to load exchange rates:', err);
+    } finally {
+      setLoadingRates(false);
+    }
+  };
+
+  const saveExchangeRates = async () => {
+    setSavingRates(true);
+    try {
+      await patch('/admin/settings', {
+        key: 'exchange_rates',
+        value: { base: ratesBaseCurrency, rates: exchangeRates },
+      });
+      toast.success('Exchange rates saved');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save');
+    } finally {
+      setSavingRates(false);
     }
   };
 
@@ -1590,6 +1610,36 @@ export default function AdminDashboard() {
                           <Button onClick={saveOfflinePaymentConfig} disabled={savingOfflinePayment} className="gap-1.5">
                             {savingOfflinePayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             {savingOfflinePayment ? 'Saving...' : 'Save Offline Config'}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    <Separator className="my-6" />
+                    <div className="space-y-4 max-w-2xl">
+                      <h3 className="font-semibold text-base flex items-center gap-2"><DollarSign className="w-4 h-4" /> Exchange Rates <span className="text-xs font-normal text-muted-foreground">(base: {ratesBaseCurrency})</span></h3>
+                      <p className="text-sm text-muted-foreground">Set conversion rates from {ratesBaseCurrency} to each supported currency. Used to display prices in buyers' local currencies.</p>
+                      {loadingRates ? (
+                        <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-secondary" /></div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                            {Object.entries(exchangeRates).map(([code, rate]) => (
+                              code === ratesBaseCurrency ? null : (
+                                <div key={code} className="space-y-1">
+                                  <Label className="text-xs font-medium">{code}</Label>
+                                  <Input
+                                    type="number" step="any" min="0"
+                                    className="h-8 text-xs"
+                                    value={rate || ''}
+                                    onChange={(e) => setExchangeRates(prev => ({ ...prev, [code]: Number(e.target.value) || 0 }))}
+                                  />
+                                </div>
+                              )
+                            ))}
+                          </div>
+                          <Button onClick={saveExchangeRates} disabled={savingRates} className="gap-1.5">
+                            {savingRates ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            {savingRates ? 'Saving...' : 'Save Exchange Rates'}
                           </Button>
                         </div>
                       )}

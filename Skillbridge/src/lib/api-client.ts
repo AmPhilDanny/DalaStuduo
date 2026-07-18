@@ -186,6 +186,7 @@ export const paymentsApi = {
   release: (orderId: string) => post(`/payments/release/${orderId}`),
   releaseMilestone: (milestone_id: string) => post('/payments/release-milestone', { milestone_id }),
   offlineConfig: () => get('/payments/offline-config'),
+  rates: () => get('/payments/rates'),
   manualPayment: (data: any) => post('/payments/manual', data),
   getManualPayments: (params?: { order_id?: string }) => get('/payments/manual', params),
 };

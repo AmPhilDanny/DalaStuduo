@@ -4,6 +4,12 @@ import { AppError } from '../../middleware/error.js';
 
 export const paymentsRouter: Router = Router();
 
+export interface ExchangeRates {
+  base: string;
+  updated_at: string;
+  rates: Record<string, number>;
+}
+
 const CURRENCY_MAP: Record<string, { code: string; symbol: string; gateway: string }> = {
   NG: { code: 'NGN', symbol: '\u20A6', gateway: 'paystack' },
   GH: { code: 'GHS', symbol: '\u20B5', gateway: 'paystack' },
@@ -313,6 +319,40 @@ paymentsRouter.get('/offline-config', async (_req: Request, res: Response) => {
   const config = await getSiteSetting('offline_payment');
   res.json({ data: config || null });
 });
+
+// ── GET /rates — exchange rates ──
+paymentsRouter.get('/rates', async (_req: Request, res: Response) => {
+  const defaultRates: ExchangeRates = {
+    base: 'NGN',
+    updated_at: new Date().toISOString(),
+    rates: {},
+  };
+  const stored = await getSiteSetting('exchange_rates') as Record<string, unknown> | null;
+  if (stored) {
+    defaultRates.base = (stored.base as string) || 'NGN';
+    defaultRates.rates = (stored.rates as Record<string, number>) || {};
+    // Merge in the CURRENCY_MAP codes so all known currencies appear even if rate is 0
+    for (const [, c] of Object.entries(CURRENCY_MAP)) {
+      if (!(c.code in defaultRates.rates)) defaultRates.rates[c.code] = 0;
+    }
+    defaultRates.rates[defaultRates.base] = 1;
+  }
+  res.json({ data: defaultRates });
+});
+
+// ── convertPrice helper (used inline in /initialize and /manual) ──
+export function convertPrice(
+  amount: number,
+  from: string,
+  to: string,
+  rates: Record<string, number>,
+): number {
+  if (from === to || !rates[from] || !rates[to]) return amount;
+  // Convert: amount (from) → base → amount (to)
+  const inBase = from === 'NGN' ? amount : amount / rates[from];
+  const result = to === 'NGN' ? inBase : inBase * rates[to];
+  return Math.round(result);
+}
 
 // ── POST /manual — initiate manual/offline payment ──
 paymentsRouter.post('/manual', async (req: Request, res: Response) => {
