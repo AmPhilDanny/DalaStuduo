@@ -516,26 +516,53 @@ export interface ComplianceReport {
   created_at: string;
 }
 
-export async function getVerification(): Promise<{ data: OrgVerification }> {
-  return b2bFetch<{ data: OrgVerification }>('/b2b/compliance/verification');
+export async function getVerification(): Promise<{ data: OrgVerification | null }> {
+  return b2bFetch<{ data: OrgVerification | null }>('/b2b/verification');
 }
 
 export async function submitVerification(input: {
   business_name: string;
-  registration_number: string;
+  registration_number?: string;
   tax_id?: string;
   document_urls?: string[];
 }): Promise<{ data: OrgVerification }> {
-  return b2bFetch<{ data: OrgVerification }>('/b2b/compliance/verification', {
+  return b2bFetch<{ data: OrgVerification }>('/b2b/verification', {
     method: 'POST',
     body: JSON.stringify(input),
   });
 }
 
+export async function uploadVerificationDocument(file: File): Promise<{ data: { url: string; path: string } }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data: sessionData } = await supabase.auth.getSession();
+  const session = sessionData.session;
+  if (!session) throw new B2BApiError('AUTH_ERROR', 'No active session');
+
+  let res: Response;
+  try {
+    const API_BASE = import.meta.env.VITE_API_URL || 'https://dalastudioshowcase.onrender.com/api';
+    res = await fetch(`${API_BASE}/b2b/verification/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      body: formData,
+    });
+  } catch {
+    throw new B2BApiError('NETWORK_ERROR', 'Failed to connect to the server');
+  }
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new B2BApiError('SERVER_ERROR', body.error || 'Upload failed', res.status);
+  }
+
+  return res.json();
+}
+
 export async function reviewVerification(verificationId: string, status: 'verified' | 'rejected', notes?: string): Promise<{ data: OrgVerification }> {
-  return b2bFetch<{ data: OrgVerification }>('/b2b/compliance/verification/review', {
+  return b2bFetch<{ data: OrgVerification }>(`/admin/verifications/${verificationId}/review`, {
     method: 'PATCH',
-    body: JSON.stringify({ verification_id: verificationId, status, notes }),
+    body: JSON.stringify({ status, notes }),
   });
 }
 

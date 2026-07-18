@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Building2, Users, Briefcase, Eye, Plus, ArrowRight, Settings, FileText, Search } from 'lucide-react';
+import { Loader2, Building2, Users, Briefcase, Eye, Plus, ArrowRight, Settings, FileText, Search, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface OrgJob {
@@ -237,6 +237,10 @@ export default function OrgDashboard() {
                 <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/jobs')}>
                   <Eye className="w-4 h-4 mr-2" />
                   View All Jobs
+                </Button>
+                <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/org/verification')}>
+                  <ShieldCheck className="w-4 h-4 mr-2" />
+                  Organization Verification
                 </Button>
               </CardContent>
             </Card>

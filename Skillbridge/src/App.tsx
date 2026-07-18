@@ -30,6 +30,7 @@ import VideoRoom from "@/pages/VideoRoom";
 
 import Disputes from "@/pages/Disputes";
 import DisputeDetail from "@/pages/DisputeDetail";
+import OrgVerification from "@/pages/OrgVerification";
 import Connections from "@/pages/Connections";
 import OrgSetup from "@/b2b/pages/OrgSetup";
 import InviteAccept from "@/b2b/pages/InviteAccept";
@@ -118,6 +119,7 @@ function App() {
               <Route path="/my-listings" element={<MyListings />} />
               <Route path="/messages" element={<Messages />} />
               <Route path="/connections" element={<Connections />} />
+              <Route path="/org/verification" element={<OrgProvider><OrgVerification /></OrgProvider>} />
               <Route path="/video-call/:roomId" element={<VideoRoom />} />
               <Route path="/disputes" element={<Disputes />} />
               <Route path="/disputes/:id" element={<DisputeDetail />} />
