@@ -17,50 +17,87 @@ interface ProviderConfig {
 
 const ACTIVE_PROVIDER = (process.env.AI_PROVIDER || 'openrouter') as AiProvider;
 
-const PROVIDER_KEY_MAP: Record<AiProvider, string> = {
-  openrouter: 'OPENROUTER_API_KEY',
-  mistral: 'MISTRAL_API_KEY',
-  openai: 'OPENAI_API_KEY',
-  groq: 'GROQ_API_KEY',
-  google: 'GOOGLE_API_KEY',
-  togetherai: 'TOGETHER_API_KEY',
+const PROVIDER_KEY_MAP: Record<AiProvider, { primary: string; fallback: string }> = {
+  openrouter: { primary: 'OPENROUTER_API_KEY', fallback: 'AI_OPENROUTER_KEY' },
+  mistral: { primary: 'MISTRAL_API_KEY', fallback: 'AI_MISTRAL_KEY' },
+  openai: { primary: 'OPENAI_API_KEY', fallback: 'AI_OPENAI_KEY' },
+  groq: { primary: 'GROQ_API_KEY', fallback: 'AI_GROQ_KEY' },
+  google: { primary: 'GOOGLE_API_KEY', fallback: 'AI_GOOGLE_KEY' },
+  togetherai: { primary: 'TOGETHER_API_KEY', fallback: 'AI_TOGETHERAI_KEY' },
 };
 
-function getProviders(): Record<AiProvider, ProviderConfig> {
+function resolveEnvKey(provider: AiProvider): string {
+  const { primary, fallback } = PROVIDER_KEY_MAP[provider];
+  return process.env[primary] || process.env[fallback] || '';
+}
+
+let cachedDbKeys: Record<string, string> | null = null;
+let keyCacheTime = 0;
+const KEY_CACHE_TTL_MS = 30_000;
+
+async function loadDbApiKeys(): Promise<Record<string, string>> {
+  if (cachedDbKeys && Date.now() - keyCacheTime < KEY_CACHE_TTL_MS) {
+    return cachedDbKeys;
+  }
+  try {
+    const { data, error } = await adminClient
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'ai_api_keys')
+      .maybeSingle();
+    if (!error && data?.value && typeof data.value === 'object') {
+      cachedDbKeys = data.value as Record<string, string>;
+    } else {
+      cachedDbKeys = {};
+    }
+  } catch {
+    cachedDbKeys = {};
+  }
+  keyCacheTime = Date.now();
+  return cachedDbKeys!;
+}
+
+function invalidateKeyCache(): void {
+  cachedDbKeys = null;
+  keyCacheTime = 0;
+}
+
+async function getProviders(): Promise<Record<AiProvider, ProviderConfig>> {
+  const dbKeys = await loadDbApiKeys();
   return {
     openrouter: {
       baseUrl: 'https://openrouter.ai/api/v1',
-      apiKey: process.env.OPENROUTER_API_KEY || '',
+      apiKey: dbKeys['openrouter'] || resolveEnvKey('openrouter'),
       defaultModel: process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001',
       label: 'OpenRouter',
     },
     mistral: {
       baseUrl: 'https://api.mistral.ai/v1',
-      apiKey: process.env.MISTRAL_API_KEY || '',
+      apiKey: dbKeys['mistral'] || resolveEnvKey('mistral'),
       defaultModel: process.env.MISTRAL_MODEL || 'mistral-large-latest',
       label: 'Mistral AI',
     },
     openai: {
       baseUrl: 'https://api.openai.com/v1',
-      apiKey: process.env.OPENAI_API_KEY || '',
+      apiKey: dbKeys['openai'] || resolveEnvKey('openai'),
       defaultModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       label: 'OpenAI',
     },
     groq: {
       baseUrl: 'https://api.groq.com/openai/v1',
-      apiKey: process.env.GROQ_API_KEY || '',
+      apiKey: dbKeys['groq'] || resolveEnvKey('groq'),
       defaultModel: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
       label: 'Groq',
     },
     google: {
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-      apiKey: process.env.GOOGLE_API_KEY || '',
+      apiKey: dbKeys['google'] || resolveEnvKey('google'),
       defaultModel: process.env.GOOGLE_MODEL || 'gemini-2.0-flash',
       label: 'Google Gemini',
     },
     togetherai: {
       baseUrl: 'https://api.together.xyz/v1',
-      apiKey: process.env.TOGETHER_API_KEY || '',
+      apiKey: dbKeys['togetherai'] || resolveEnvKey('togetherai'),
       defaultModel: process.env.TOGETHER_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
       label: 'Together AI',
     },
@@ -141,10 +178,11 @@ Return ONLY the description.`;
 }
 
 async function callAiProvider(prompt: string): Promise<string> {
-  const providers = getProviders();
+  const providers = await getProviders();
   const provider = providers[ACTIVE_PROVIDER];
   if (!provider.apiKey) {
-    throw new AppError(500, `AI provider "${ACTIVE_PROVIDER}" not configured. Set ${PROVIDER_KEY_MAP[ACTIVE_PROVIDER]}`);
+    const { primary, fallback } = PROVIDER_KEY_MAP[ACTIVE_PROVIDER];
+    throw new AppError(500, `AI provider "${ACTIVE_PROVIDER}" not configured. Set ${primary} or ${fallback} environment variable, or add the key in Admin → Site Settings → AI Settings.`);
   }
 
   const response = await fetch(`${provider.baseUrl}/chat/completions`, {
@@ -163,7 +201,7 @@ async function callAiProvider(prompt: string): Promise<string> {
 }
 
 async function chatAiProvider(messages: Array<{ role: string; content: string }>): Promise<string> {
-  const providers = getProviders();
+  const providers = await getProviders();
   const provider = providers[ACTIVE_PROVIDER];
 
   const response = await fetch(`${provider.baseUrl}/chat/completions`, {
@@ -238,7 +276,7 @@ async function handleTutorGrade(body: RequestBody): Promise<string> {
 
 // ── GET /ai/providers — list all providers with their configured status ──
 aiRouter.get('/providers', async (_req: Request, res: Response) => {
-  const providers = getProviders();
+  const providers = await getProviders();
   const list = Object.entries(providers).map(([id, cfg]) => ({
     id,
     label: cfg.label,
@@ -252,7 +290,7 @@ aiRouter.get('/providers', async (_req: Request, res: Response) => {
 aiRouter.post('/test', requireAuth, async (req: Request, res: Response) => {
   const { provider: raw } = req.body || {};
   const providerId = (raw || ACTIVE_PROVIDER) as AiProvider;
-  const providers = getProviders();
+  const providers = await getProviders();
   const cfg = providers[providerId];
   if (!cfg) {
     res.status(400).json({ error: `Unknown provider "${providerId}"` });
@@ -277,10 +315,11 @@ aiRouter.post('/test', requireAuth, async (req: Request, res: Response) => {
 
 // ── POST /ai — main AI assist handler ──
 aiRouter.post('/', async (req: Request, res: Response) => {
-  const providers = getProviders();
+  const providers = await getProviders();
   const provider = providers[ACTIVE_PROVIDER];
   if (!provider.apiKey) {
-    throw new AppError(500, `AI provider "${ACTIVE_PROVIDER}" not configured. Set ${PROVIDER_KEY_MAP[ACTIVE_PROVIDER]}`);
+    const { primary, fallback } = PROVIDER_KEY_MAP[ACTIVE_PROVIDER];
+    throw new AppError(500, `AI provider "${ACTIVE_PROVIDER}" not configured. Set ${primary} or ${fallback} environment variable, or add the key in Admin → Site Settings → AI Settings.`);
   }
 
   const body: RequestBody = req.body;
@@ -302,4 +341,52 @@ aiRouter.post('/', async (req: Request, res: Response) => {
   const prompt = buildPrompt(body);
   const resultText = await callAiProvider(prompt);
   res.json({ result: resultText });
+});
+
+// ── GET /ai/keys — list all stored API keys (masked) ──
+aiRouter.get('/keys', requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const { data, error } = await adminClient
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'ai_api_keys')
+      .maybeSingle();
+    if (error) throw new AppError(500, error.message);
+    const keys = (data?.value && typeof data.value === 'object' ? data.value : {}) as Record<string, string>;
+    const masked: Record<string, string> = {};
+    for (const [k, v] of Object.entries(keys)) {
+      masked[k] = v ? v.slice(0, 8) + '...' + v.slice(-4) : '';
+    }
+    res.json({ data: keys, masked });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(500, 'Failed to load API keys');
+  }
+});
+
+// ── POST /ai/keys — save API keys for all providers ──
+aiRouter.post('/keys', requireAuth, async (req: Request, res: Response) => {
+  const { keys } = req.body || {};
+  if (!keys || typeof keys !== 'object') {
+    res.status(400).json({ error: 'Missing or invalid "keys" object' });
+    return;
+  }
+  const validIds = new Set(['openrouter', 'mistral', 'openai', 'groq', 'google', 'togetherai']);
+  for (const k of Object.keys(keys)) {
+    if (!validIds.has(k)) {
+      res.status(400).json({ error: `Unknown provider id "${k}"` });
+      return;
+    }
+  }
+  try {
+    const { error: upsertError } = await adminClient
+      .from('site_settings')
+      .upsert({ key: 'ai_api_keys', value: keys }, { onConflict: 'key' });
+    if (upsertError) throw new AppError(500, upsertError.message);
+    invalidateKeyCache();
+    res.json({ status: 'ok' });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(500, 'Failed to save API keys');
+  }
 });

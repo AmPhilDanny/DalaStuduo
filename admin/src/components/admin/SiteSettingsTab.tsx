@@ -44,8 +44,10 @@ export default function SiteSettingsTab() {
   const [aiProviders, setAiProviders] = useState<AiProviderInfo[]>([]);
   const [testingAi, setTestingAi] = useState<string | null>(null);
   const [aiTestResult, setAiTestResult] = useState<{ provider: string; ok: boolean; message: string } | null>(null);
+  const [apiKeyValues, setApiKeyValues] = useState<Record<string, string>>({});
+  const [keySaving, setKeySaving] = useState(false);
 
-  useEffect(() => { loadConfig(); loadProviders(); }, []);
+  useEffect(() => { loadConfig(); loadProviders(); loadApiKeys(); }, []);
 
   const uploadFile = async (file: File, targetPath: string): Promise<string | null> => {
     const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
@@ -83,6 +85,45 @@ export default function SiteSettingsTab() {
     setUploadTarget(target);
     // Use a small timeout to let state update, then click
     setTimeout(() => fileInputRef.current?.click(), 0);
+  };
+
+  const loadApiKeys = async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/ai/keys`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.data) setApiKeyValues(json.data as Record<string, string>);
+      }
+    } catch { /* ignore */ }
+  };
+
+  const saveApiKeys = async () => {
+    setKeySaving(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch(`${API_BASE}/ai/keys`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keys: apiKeyValues }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || 'Failed to save API keys');
+      }
+      toast.success('API keys saved');
+      loadProviders(); // refresh configured status
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save API keys');
+    } finally {
+      setKeySaving(false);
+    }
   };
 
   const loadProviders = async () => {
@@ -384,7 +425,36 @@ export default function SiteSettingsTab() {
         {/* ── AI Settings ── */}
         <section className="space-y-4">
           <h3 className="text-lg font-semibold border-b pb-2">AI Settings</h3>
+
+          {/* API Key Inputs */}
           <div className="space-y-3">
+            <Label className="text-sm font-medium">Provider API Keys</Label>
+            {aiProviders.length === 0 && <p className="text-sm text-muted-foreground">Loading providers...</p>}
+            {aiProviders.map((p) => (
+              <div key={p.id} className="flex items-center gap-2">
+                <Label className="w-28 shrink-0 text-sm">{p.label}</Label>
+                <Input
+                  type="password"
+                  placeholder={apiKeyValues[p.id] ? '•••••••• (key stored)' : `Enter ${p.label} API key`}
+                  value={apiKeyValues[p.id] || ''}
+                  onChange={(e) => setApiKeyValues((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                  className="flex-1"
+                />
+              </div>
+            ))}
+            <Button
+              size="sm"
+              onClick={saveApiKeys}
+              disabled={keySaving}
+              className="gap-1.5"
+            >
+              {keySaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {keySaving ? 'Saving Keys...' : 'Save API Keys'}
+            </Button>
+          </div>
+
+          {/* Preferred Provider & Test */}
+          <div className="space-y-3 pt-2">
             <div className="space-y-1.5">
               <Label>Preferred AI Provider</Label>
               <select
