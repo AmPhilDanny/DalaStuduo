@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
+const VALID_PROVIDER_IDS = ['openrouter', 'mistral', 'openai', 'groq', 'google', 'togetherai'] as const;
+
 interface NavLink { name: string; href: string; }
 interface FooterColumn { title: string; links: NavLink[]; }
 interface AiProviderInfo { id: string; label: string; configured: boolean; active: boolean; }
@@ -142,6 +144,10 @@ export default function SiteSettingsTab() {
   };
 
   const testAiProvider = async (providerId: string) => {
+    if (!providerId || !VALID_PROVIDER_IDS.includes(providerId as any)) {
+      setAiTestResult({ provider: providerId, ok: false, message: 'Select a valid preferred provider first' });
+      return;
+    }
     setTestingAi(providerId);
     setAiTestResult(null);
     try {
@@ -150,7 +156,7 @@ export default function SiteSettingsTab() {
       const res = await fetch(`${API_BASE}/ai/test`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: providerId || undefined }),
+        body: JSON.stringify({ provider: providerId }),
       });
       if (res.ok) {
         setAiTestResult({ provider: providerId, ok: true, message: 'API key is working' });
@@ -176,6 +182,10 @@ export default function SiteSettingsTab() {
           // api_keys may be old format (flat booleans) — normalise to { preferred: '' }
           const apiKeys = (raw.api_keys as Record<string, unknown>) || {};
           const normalised = typeof apiKeys.preferred === 'string' ? apiKeys : { preferred: '' };
+          // Ensure preferred is a valid provider ID — invalid values (e.g. env var names) get reset
+          if (normalised.preferred && !VALID_PROVIDER_IDS.includes(normalised.preferred as any)) {
+            normalised.preferred = '';
+          }
           setConfig({ ...DEFAULT_CONFIG, ...raw, api_keys: normalised } as SiteConfig);
         }
       }

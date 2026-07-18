@@ -289,13 +289,14 @@ aiRouter.get('/providers', async (_req: Request, res: Response) => {
 // ── POST /ai/test — test a provider's API key with a simple completion ──
 aiRouter.post('/test', requireAuth, async (req: Request, res: Response) => {
   const { provider: raw } = req.body || {};
-  const providerId = (raw || ACTIVE_PROVIDER) as AiProvider;
-  const providers = await getProviders();
-  const cfg = providers[providerId];
-  if (!cfg) {
-    res.status(400).json({ error: `Unknown provider "${providerId}"` });
+  const providerId = (raw || ACTIVE_PROVIDER) as string;
+  const validIds = ['openrouter', 'mistral', 'openai', 'groq', 'google', 'togetherai'];
+  if (!validIds.includes(providerId)) {
+    res.status(400).json({ error: `Unknown provider "${providerId}". Valid providers: ${validIds.join(', ')}` });
     return;
   }
+  const providers = await getProviders();
+  const cfg = providers[providerId as AiProvider];
   if (!cfg.apiKey) {
     res.status(400).json({ error: `No API key configured for ${cfg.label}` });
     return;
