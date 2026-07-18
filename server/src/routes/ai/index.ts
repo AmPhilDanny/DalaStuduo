@@ -31,74 +31,45 @@ function resolveEnvKey(provider: AiProvider): string {
   return process.env[primary] || process.env[fallback] || '';
 }
 
-let cachedDbKeys: Record<string, string> | null = null;
-let keyCacheTime = 0;
-const KEY_CACHE_TTL_MS = 30_000;
-
-async function loadDbApiKeys(): Promise<Record<string, string>> {
-  if (cachedDbKeys && Date.now() - keyCacheTime < KEY_CACHE_TTL_MS) {
-    return cachedDbKeys;
-  }
-  try {
-    const { data, error } = await adminClient
-      .from('site_settings')
-      .select('value')
-      .eq('key', 'ai_api_keys')
-      .maybeSingle();
-    if (!error && data?.value && typeof data.value === 'object') {
-      cachedDbKeys = data.value as Record<string, string>;
-    } else {
-      cachedDbKeys = {};
-    }
-  } catch {
-    cachedDbKeys = {};
-  }
-  keyCacheTime = Date.now();
-  return cachedDbKeys!;
-}
-
-function invalidateKeyCache(): void {
-  cachedDbKeys = null;
-  keyCacheTime = 0;
-}
-
 async function getProviders(): Promise<Record<AiProvider, ProviderConfig>> {
-  const dbKeys = await loadDbApiKeys();
+  const [dbKeys, dbModels] = await Promise.all([loadDbApiKeys(), loadDbModels()]);
+  const modelFor = (provider: string, envKey: string, fallback: string) =>
+    dbModels[provider] || process.env[envKey] || fallback;
   return {
     openrouter: {
       baseUrl: 'https://openrouter.ai/api/v1',
       apiKey: dbKeys['openrouter'] || resolveEnvKey('openrouter'),
-      defaultModel: process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001',
+      defaultModel: modelFor('openrouter', 'OPENROUTER_MODEL', 'google/gemini-2.0-flash-001'),
       label: 'OpenRouter',
     },
     mistral: {
       baseUrl: 'https://api.mistral.ai/v1',
       apiKey: dbKeys['mistral'] || resolveEnvKey('mistral'),
-      defaultModel: process.env.MISTRAL_MODEL || 'mistral-large-latest',
+      defaultModel: modelFor('mistral', 'MISTRAL_MODEL', 'mistral-large-latest'),
       label: 'Mistral AI',
     },
     openai: {
       baseUrl: 'https://api.openai.com/v1',
       apiKey: dbKeys['openai'] || resolveEnvKey('openai'),
-      defaultModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      defaultModel: modelFor('openai', 'OPENAI_MODEL', 'gpt-4o-mini'),
       label: 'OpenAI',
     },
     groq: {
       baseUrl: 'https://api.groq.com/openai/v1',
       apiKey: dbKeys['groq'] || resolveEnvKey('groq'),
-      defaultModel: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+      defaultModel: modelFor('groq', 'GROQ_MODEL', 'llama-3.3-70b-versatile'),
       label: 'Groq',
     },
     google: {
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
       apiKey: dbKeys['google'] || resolveEnvKey('google'),
-      defaultModel: process.env.GOOGLE_MODEL || 'gemini-2.0-flash',
+      defaultModel: modelFor('google', 'GOOGLE_MODEL', 'gemini-2.0-flash'),
       label: 'Google Gemini',
     },
     togetherai: {
       baseUrl: 'https://api.together.xyz/v1',
       apiKey: dbKeys['togetherai'] || resolveEnvKey('togetherai'),
-      defaultModel: process.env.TOGETHER_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+      defaultModel: modelFor('togetherai', 'TOGETHER_MODEL', 'meta-llama/Llama-3.3-70B-Instruct-Turbo'),
       label: 'Together AI',
     },
   };
@@ -345,20 +316,76 @@ aiRouter.post('/', async (req: Request, res: Response) => {
 });
 
 // ── GET /ai/keys — list all stored API keys (masked) ──
-aiRouter.get('/keys', requireAuth, async (_req: Request, res: Response) => {
+let cachedDbKeys: Record<string, string> | null = null;
+let keyCacheTime = 0;
+const KEY_CACHE_TTL_MS = 30_000;
+
+async function loadDbApiKeys(): Promise<Record<string, string>> {
+  if (cachedDbKeys && Date.now() - keyCacheTime < KEY_CACHE_TTL_MS) {
+    return cachedDbKeys;
+  }
   try {
     const { data, error } = await adminClient
       .from('site_settings')
       .select('value')
       .eq('key', 'ai_api_keys')
       .maybeSingle();
-    if (error) throw new AppError(500, error.message);
-    const keys = (data?.value && typeof data.value === 'object' ? data.value : {}) as Record<string, string>;
+    if (!error && data?.value && typeof data.value === 'object') {
+      cachedDbKeys = data.value as Record<string, string>;
+    } else {
+      cachedDbKeys = {};
+    }
+  } catch {
+    cachedDbKeys = {};
+  }
+  keyCacheTime = Date.now();
+  return cachedDbKeys!;
+}
+
+function invalidateKeyCache(): void {
+  cachedDbKeys = null;
+  keyCacheTime = 0;
+}
+
+let cachedModels: Record<string, string> | null = null;
+let modelCacheTime = 0;
+const MODEL_CACHE_TTL_MS = 30_000;
+
+async function loadDbModels(): Promise<Record<string, string>> {
+  if (cachedModels && Date.now() - modelCacheTime < MODEL_CACHE_TTL_MS) {
+    return cachedModels;
+  }
+  try {
+    const { data, error } = await adminClient
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'ai_models')
+      .maybeSingle();
+    if (!error && data?.value && typeof data.value === 'object') {
+      cachedModels = data.value as Record<string, string>;
+    } else {
+      cachedModels = {};
+    }
+  } catch {
+    cachedModels = {};
+  }
+  modelCacheTime = Date.now();
+  return cachedModels!;
+}
+
+function invalidateModelCache(): void {
+  cachedModels = null;
+  modelCacheTime = 0;
+}
+
+aiRouter.get('/keys', requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const dbKeys = await loadDbApiKeys();
     const masked: Record<string, string> = {};
-    for (const [k, v] of Object.entries(keys)) {
+    for (const [k, v] of Object.entries(dbKeys)) {
       masked[k] = v ? v.slice(0, 8) + '...' + v.slice(-4) : '';
     }
-    res.json({ data: keys, masked });
+    res.json({ data: dbKeys, masked });
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new AppError(500, 'Failed to load API keys');
@@ -389,5 +416,43 @@ aiRouter.post('/keys', requireAuth, async (req: Request, res: Response) => {
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new AppError(500, 'Failed to save API keys');
+  }
+});
+
+// ── GET /ai/models — list per-provider model overrides ──
+aiRouter.get('/models', requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const models = await loadDbModels();
+    res.json({ data: models });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(500, 'Failed to load AI models');
+  }
+});
+
+// ── POST /ai/models — save per-provider model overrides ──
+aiRouter.post('/models', requireAuth, async (req: Request, res: Response) => {
+  const { models } = req.body || {};
+  if (!models || typeof models !== 'object') {
+    res.status(400).json({ error: 'Missing or invalid "models" object' });
+    return;
+  }
+  const validIds = new Set(['openrouter', 'mistral', 'openai', 'groq', 'google', 'togetherai']);
+  for (const k of Object.keys(models)) {
+    if (!validIds.has(k)) {
+      res.status(400).json({ error: `Unknown provider id "${k}"` });
+      return;
+    }
+  }
+  try {
+    const { error: upsertError } = await adminClient
+      .from('site_settings')
+      .upsert({ key: 'ai_models', value: models }, { onConflict: 'key' });
+    if (upsertError) throw new AppError(500, upsertError.message);
+    invalidateModelCache();
+    res.json({ status: 'ok' });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(500, 'Failed to save AI models');
   }
 });
