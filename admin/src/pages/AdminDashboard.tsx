@@ -879,7 +879,7 @@ export default function AdminDashboard() {
     setPlanForm({
       name: plan?.name || '', slug: plan?.slug || '', description: plan?.description || '',
       price_monthly: plan?.price_monthly ?? 0, price_yearly: plan?.price_yearly ?? 0,
-      features: (plan?.features || []).join(', '), is_active: plan?.is_active ?? true, sort_order: plan?.sort_order ?? 0,
+      features: Array.isArray(plan?.features) ? plan.features.join(', ') : (typeof plan?.features === 'string' ? plan.features : ''), is_active: plan?.is_active ?? true, sort_order: plan?.sort_order ?? 0,
     });
   };
 
@@ -2204,8 +2204,8 @@ export default function AdminDashboard() {
                           <TableCell>${Number(plan.price_yearly).toFixed(2)}</TableCell>
                           <TableCell className="max-w-[200px]">
                             <div className="flex flex-wrap gap-1">
-                              {(plan.features || []).slice(0, 3).map((f: string, i: number) => (<Badge key={i} variant="secondary" className="text-xs">{f}</Badge>))}
-                              {(plan.features || []).length > 3 && <Badge variant="outline" className="text-xs">+{plan.features.length - 3}</Badge>}
+                              {(() => { const f = Array.isArray(plan.features) ? plan.features : []; return f.slice(0, 3).map((feat: string, i: number) => (<Badge key={i} variant="secondary" className="text-xs">{feat}</Badge>)); })()}
+                              {(() => { const f = Array.isArray(plan.features) ? plan.features : []; return f.length > 3 && <Badge variant="outline" className="text-xs">+{f.length - 3}</Badge>; })()}
                             </div>
                           </TableCell>
                           <TableCell><Button size="sm" variant={plan.is_active ? 'default' : 'outline'} className="h-6 text-xs px-2" onClick={() => handleTogglePlanActive(plan)}>{plan.is_active ? 'Active' : 'Inactive'}</Button></TableCell>

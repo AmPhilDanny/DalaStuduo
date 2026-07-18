@@ -13,6 +13,17 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Fix column type if table was created manually with TEXT instead of JSONB
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'subscription_plans' AND column_name = 'features' AND data_type = 'text'
+  ) THEN
+    ALTER TABLE subscription_plans ALTER COLUMN features TYPE JSONB USING features::jsonb;
+  END IF;
+END $$;
+
 -- Seed default Free plan
 INSERT INTO subscription_plans (name, slug, description, price_monthly, price_yearly, features, sort_order)
 VALUES ('Free', 'free', 'Free plan for small teams', 0, 0, '["Up to 5 team members", "3 active jobs", "Basic support"]', 0)
