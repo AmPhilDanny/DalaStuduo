@@ -13,8 +13,36 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/useAuth';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
+import { supabase } from '@/integrations/supabase/client';
 import { getUnreadCount, getNotifications, markNotificationRead, markAllNotificationsRead, Notification } from '@/lib/marketplace';
 import { toast } from 'sonner';
+
+const goToMainSite = async (path: string) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    const { access_token, refresh_token } = session;
+    window.location.href = `${MAIN_SITE_URL}${path}#access_token=${access_token}&refresh_token=${refresh_token}&token_type=bearer&type=recovery`;
+  } else {
+    window.location.href = `${MAIN_SITE_URL}/auth`;
+  }
+};
+
+const MAIN_SITE_URL = import.meta.env.VITE_MAIN_SITE_URL || 'http://localhost:3000';
+
+function MainSiteLink({ href, children, className, onClick: extraOnClick, ...props }: { href: string; children: React.ReactNode; className?: string; onClick?: React.MouseEventHandler<HTMLAnchorElement>; [key: string]: unknown }) {
+  const handleClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    await goToMainSite(href);
+    extraOnClick?.(e);
+  };
+
+  return (
+    <a href={`${MAIN_SITE_URL}${href}`} onClick={handleClick} className={className} {...props}>
+      {children}
+    </a>
+  );
+}
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -23,7 +51,6 @@ export function Navbar() {
   const { config, loading: siteLoading } = useSiteSettings();
   const navigate = useNavigate();
   const location = useLocation();
-  const MAIN_SITE_URL = import.meta.env.VITE_MAIN_SITE_URL || 'http://localhost:3000';
 
   // Notifications
   const [unreadCount, setUnreadCount] = useState(0);
@@ -129,7 +156,7 @@ export function Navbar() {
       }`}
     >
       <div className="container mx-auto px-4 flex items-center justify-between">
-        <a href={`${MAIN_SITE_URL}/`} className="flex items-center gap-2">
+        <MainSiteLink href="/" className="flex items-center gap-2">
           {config.brand.logo_url ? (
             <img src={config.brand.logo_url} alt={config.brand.site_name} className="w-8 h-8 object-contain" />
           ) : (
@@ -138,7 +165,7 @@ export function Navbar() {
           <span className={`text-xl font-bold tracking-tight ${isPlayground ? 'text-white' : 'text-primary'}`}>
             {config.brand.site_name || 'SkillBridge Africa'}
           </span>
-        </a>
+        </MainSiteLink>
 
         {/* Desktop Links */}
         <div className="hidden lg:flex items-center gap-6">
@@ -146,9 +173,9 @@ export function Navbar() {
             const isActive = location.pathname === link.href
               || (link.href !== '/' && location.pathname.startsWith(link.href));
             return (
-              <a
+              <MainSiteLink
                 key={link.name}
-                href={`${MAIN_SITE_URL}${link.href}`}
+                href={link.href}
                 onClick={(e) => handleNavClick(e, link.href)}
                 className={`text-sm font-medium transition-colors whitespace-nowrap ${
                   isActive
@@ -157,7 +184,7 @@ export function Navbar() {
                 }`}
               >
                 {link.name}
-              </a>
+              </MainSiteLink>
             );
           })}
           {user ? (
@@ -236,69 +263,69 @@ export function Navbar() {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <a href={`${MAIN_SITE_URL}/profile`} className="cursor-pointer flex items-center gap-2">
+                    <MainSiteLink href="/profile" className="cursor-pointer flex items-center gap-2">
                       <User className="w-4 h-4" />
                       <span>Profile</span>
-                    </a>
+                    </MainSiteLink>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href={`${MAIN_SITE_URL}/connections`} className="cursor-pointer flex items-center gap-2">
+                    <MainSiteLink href="/connections" className="cursor-pointer flex items-center gap-2">
                       <Users className="w-4 h-4" />
                       <span>Connections</span>
-                    </a>
+                    </MainSiteLink>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href={`${MAIN_SITE_URL}/messages`} className="cursor-pointer flex items-center gap-2">
+                    <MainSiteLink href="/messages" className="cursor-pointer flex items-center gap-2">
                       <MessageSquare className="w-4 h-4" />
                       <span>Messages</span>
-                    </a>
+                    </MainSiteLink>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href={`${MAIN_SITE_URL}${profile?.role === 'firm' ? '/dashboard/org' : '/dashboard'}`} className="cursor-pointer flex items-center gap-2">
+                    <MainSiteLink href={profile?.role === 'firm' ? '/dashboard/org' : '/dashboard'} className="cursor-pointer flex items-center gap-2">
                       <LayoutDashboard className="w-4 h-4" />
                       <span>Dashboard</span>
-                    </a>
+                    </MainSiteLink>
                   </DropdownMenuItem>
                   {profile?.role === 'firm' && (
                     <>
                       <DropdownMenuItem asChild>
-                        <a href={`${MAIN_SITE_URL}/b2b/setup`} className="cursor-pointer flex items-center gap-2">
+                        <MainSiteLink href="/b2b/setup" className="cursor-pointer flex items-center gap-2">
                           <Building2 className="w-4 h-4" />
                           <span>Org Setup</span>
-                        </a>
+                        </MainSiteLink>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
-                        <a href={`${MAIN_SITE_URL}/jobs/new`} className="cursor-pointer flex items-center gap-2">
+                        <MainSiteLink href="/jobs/new" className="cursor-pointer flex items-center gap-2">
                           <Rocket className="w-4 h-4" />
                           <span>Post Job</span>
-                        </a>
+                        </MainSiteLink>
                       </DropdownMenuItem>
                     </>
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <a href={`${MAIN_SITE_URL}/orders`} className="cursor-pointer flex items-center gap-2">
+                    <MainSiteLink href="/orders" className="cursor-pointer flex items-center gap-2">
                       <Package className="w-4 h-4" />
                       <span>Orders</span>
-                    </a>
+                    </MainSiteLink>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href={`${MAIN_SITE_URL}/wallet`} className="cursor-pointer flex items-center gap-2">
+                    <MainSiteLink href="/wallet" className="cursor-pointer flex items-center gap-2">
                       <WalletIcon className="w-4 h-4" />
                       <span>Wallet</span>
-                    </a>
+                    </MainSiteLink>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href={`${MAIN_SITE_URL}/my-listings`} className="cursor-pointer flex items-center gap-2">
+                    <MainSiteLink href="/my-listings" className="cursor-pointer flex items-center gap-2">
                       <Store className="w-4 h-4" />
                       <span>My Listings</span>
-                    </a>
+                    </MainSiteLink>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <a href={`${MAIN_SITE_URL}/disputes`} className="cursor-pointer flex items-center gap-2">
+                    <MainSiteLink href="/disputes" className="cursor-pointer flex items-center gap-2">
                       <Shield className="w-4 h-4" />
                       <span>Disputes</span>
-                    </a>
+                    </MainSiteLink>
                   </DropdownMenuItem>
                   {profile?.role && ['super_admin', 'admin'].includes(profile.role) && (
                     <>
@@ -341,9 +368,9 @@ export function Navbar() {
             const isActive = location.pathname === link.href
               || (link.href !== '/' && location.pathname.startsWith(link.href));
             return (
-              <a
+              <MainSiteLink
                 key={link.name}
-                href={`${MAIN_SITE_URL}${link.href}`}
+                href={link.href}
                 onClick={(e) => handleNavClick(e, link.href)}
                 className={`text-lg font-medium transition-colors ${
                   isActive
@@ -352,7 +379,7 @@ export function Navbar() {
                 }`}
               >
                 {link.name}
-              </a>
+              </MainSiteLink>
             );
           })}
           {user ? (
@@ -360,45 +387,45 @@ export function Navbar() {
               <div className="border-t border-border pt-3 mt-1">
                 <p className="text-xs text-muted-foreground mb-2">Account</p>
                 <div className="flex items-center gap-3 mb-2">
-                  <a href={`${MAIN_SITE_URL}/orders`} onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
+                  <MainSiteLink href="/orders" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
                     <Package className="w-4 h-4" /> Orders
-                  </a>
-                  <a href={`${MAIN_SITE_URL}/disputes`} onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
+                  </MainSiteLink>
+                  <MainSiteLink href="/disputes" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
                     <Shield className="w-4 h-4" /> Disputes
-                  </a>
-                  <a href={`${MAIN_SITE_URL}/wallet`} onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
+                  </MainSiteLink>
+                  <MainSiteLink href="/wallet" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
                     <WalletIcon className="w-4 h-4" /> Wallet
-                  </a>
-                  <a href={`${MAIN_SITE_URL}/my-listings`} onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
+                  </MainSiteLink>
+                  <MainSiteLink href="/my-listings" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
                     <Store className="w-4 h-4" /> My Listings
-                  </a>
+                  </MainSiteLink>
                 </div>
-                <a href={`${MAIN_SITE_URL}${profile?.role === 'firm' ? '/dashboard/org' : '/dashboard'}`}
+                <MainSiteLink href={profile?.role === 'firm' ? '/dashboard/org' : '/dashboard'}
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="text-lg font-medium text-primary block"
                 >
                   Dashboard
-                </a>
+                </MainSiteLink>
                 {profile?.role === 'firm' && (
-                  <a href={`${MAIN_SITE_URL}/jobs/new`}
+                  <MainSiteLink href="/jobs/new"
                     onClick={() => setIsMobileMenuOpen(false)}
                     className="text-lg font-medium text-muted-foreground hover:text-primary block"
                   >
                     Post Job
-                  </a>
+                  </MainSiteLink>
                 )}
-                <a href={`${MAIN_SITE_URL}/profile`}
+                <MainSiteLink href="/profile"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="text-lg font-medium text-muted-foreground hover:text-primary block"
                 >
                   My Profile
-                </a>
-                <a href={`${MAIN_SITE_URL}/my-applications`}
+                </MainSiteLink>
+                <MainSiteLink href="/my-applications"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="text-lg font-medium text-muted-foreground hover:text-primary block"
                 >
                   My Applications
-                </a>
+                </MainSiteLink>
               </div>
               <Button className="w-full" variant="outline" onClick={signOut}>
                 Sign Out

@@ -43,6 +43,7 @@ export interface SiteConfig {
     og_image_url: string;
     theme_color: string;
   };
+  admin_panel_url: string;
   api_keys: Record<string, { api_key: string; enabled: boolean }>;
 }
 
@@ -120,6 +121,7 @@ const DEFAULT_CONFIG: SiteConfig = {
     og_image_url: '/fhinovax.webp',
     theme_color: '#ffffff',
   },
+  admin_panel_url: 'http://localhost:4000/',
   api_keys: {},
 };
 

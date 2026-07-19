@@ -30,12 +30,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return session?.access_token || null;
     });
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) fetchProfile(session.user.id);
-      else setFetchedOnce(true);
-    });
+    // Check URL hash for cross-domain session transfer (e.g. from admin panel)
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token=')) {
+      const params = new URLSearchParams(hash.replace('#', ''));
+      const access_token = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+      if (access_token && refresh_token) {
+        supabase.auth.setSession({ access_token, refresh_token }).then(({ data: { session } }) => {
+          if (session) {
+            setSession(session);
+            fetchProfile(session.user.id);
+          } else {
+            setFetchedOnce(true);
+          }
+        });
+        // Clean the URL hash so tokens aren't visible after use
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      } else {
+        setFetchedOnce(true);
+      }
+    } else {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session);
+        if (session) fetchProfile(session.user.id);
+        else setFetchedOnce(true);
+      });
+    }
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {

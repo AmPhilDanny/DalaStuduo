@@ -20,6 +20,7 @@ interface SiteConfig {
   footer: { description: string; columns: FooterColumn[]; newsletter_enabled: boolean; newsletter_placeholder: string; copyright_text: string };
   social: { twitter: string; linkedin: string; github: string; facebook: string; instagram: string };
   meta: { title: string; description: string; keywords: string; author: string; og_image_url: string; theme_color: string };
+  admin_panel_url: string;
   api_keys: { preferred: string };
 }
 
@@ -30,6 +31,7 @@ const DEFAULT_CONFIG: SiteConfig = {
   footer: { description: '', columns: [], newsletter_enabled: true, newsletter_placeholder: '', copyright_text: '' },
   social: { twitter: '', linkedin: '', github: '', facebook: '', instagram: '' },
   meta: { title: '', description: '', keywords: '', author: '', og_image_url: '', theme_color: '#ffffff' },
+  admin_panel_url: 'http://localhost:4000/',
   api_keys: { preferred: '' },
 };
 
@@ -327,6 +329,22 @@ export default function SiteSettingsTab() {
                 ))}
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* ── Admin Panel URL ── */}
+        <section className="space-y-4">
+          <h3 className="text-lg font-semibold border-b pb-2">Admin Panel</h3>
+          <div className="space-y-1.5">
+            <Label>Admin Dashboard URL</Label>
+            <Input
+              value={config.admin_panel_url}
+              onChange={(e) => update('admin_panel_url', e.target.value)}
+              placeholder="https://admin.example.com"
+            />
+            <p className="text-xs text-muted-foreground">
+              This URL is used in the frontend navigation menu when a super admin clicks "Admin Panel".
+            </p>
           </div>
         </section>
 

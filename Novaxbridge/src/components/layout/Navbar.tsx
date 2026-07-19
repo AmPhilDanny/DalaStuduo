@@ -279,7 +279,7 @@ export function Navbar() {
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem asChild>
-                        <a href="http://localhost:4000/" className="cursor-pointer flex items-center gap-2 w-full">
+                        <a href={config.admin_panel_url || 'http://localhost:4000/'} className="cursor-pointer flex items-center gap-2 w-full" target="_blank" rel="noopener noreferrer">
                           <Settings className="w-4 h-4" />
                           <span>Admin Panel</span>
                         </a>
@@ -385,7 +385,7 @@ export function Navbar() {
                 {profile?.role && ['super_admin', 'admin'].includes(profile.role) && (
                   <>
                     <div className="my-2 border-t border-border/50"></div>
-                    <a href="http://localhost:4000/" className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                    <a href={config.admin_panel_url || 'http://localhost:4000/'} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
                       <Settings className="w-4 h-4" /> Admin Panel
                     </a>
                   </>
