@@ -46,6 +46,7 @@ export interface SiteConfig {
     theme_color: string;
   };
   admin_panel_url: string;
+  main_site_url: string;
   api_keys: Record<string, { api_key: string; enabled: boolean }>;
 }
 
@@ -122,6 +123,7 @@ const DEFAULT_CONFIG: SiteConfig = {
     theme_color: '#ffffff',
   },
   admin_panel_url: 'http://localhost:4000/',
+  main_site_url: 'http://localhost:3000',
   api_keys: {},
 };
 

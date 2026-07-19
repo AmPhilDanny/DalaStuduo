@@ -21,6 +21,7 @@ interface SiteConfig {
   social: { twitter: string; linkedin: string; github: string; facebook: string; instagram: string };
   meta: { title: string; description: string; keywords: string; author: string; og_image_url: string; theme_color: string };
   admin_panel_url: string;
+  main_site_url: string;
   api_keys: { preferred: string };
 }
 
@@ -32,6 +33,7 @@ const DEFAULT_CONFIG: SiteConfig = {
   social: { twitter: '', linkedin: '', github: '', facebook: '', instagram: '' },
   meta: { title: '', description: '', keywords: '', author: '', og_image_url: '', theme_color: '#ffffff' },
   admin_panel_url: 'http://localhost:4000/',
+  main_site_url: 'http://localhost:3000',
   api_keys: { preferred: '' },
 };
 
@@ -332,9 +334,9 @@ export default function SiteSettingsTab() {
           </div>
         </section>
 
-        {/* ── Admin Panel URL ── */}
+        {/* ── Cross-Domain URLs ── */}
         <section className="space-y-4">
-          <h3 className="text-lg font-semibold border-b pb-2">Admin Panel</h3>
+          <h3 className="text-lg font-semibold border-b pb-2">Cross-Domain URLs</h3>
           <div className="space-y-1.5">
             <Label>Admin Dashboard URL</Label>
             <Input
@@ -343,7 +345,18 @@ export default function SiteSettingsTab() {
               placeholder="https://admin.example.com"
             />
             <p className="text-xs text-muted-foreground">
-              This URL is used in the frontend navigation menu when a super admin clicks "Admin Panel".
+              Used in the frontend navigation menu when a super admin clicks "Admin Panel".
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Main Site URL</Label>
+            <Input
+              value={config.main_site_url}
+              onChange={(e) => update('main_site_url', e.target.value)}
+              placeholder="https://example.com"
+            />
+            <p className="text-xs text-muted-foreground">
+              Used in the admin nav links so admins navigate to the correct frontend domain.
             </p>
           </div>
         </section>

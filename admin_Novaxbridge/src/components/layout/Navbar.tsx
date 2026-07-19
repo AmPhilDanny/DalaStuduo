@@ -17,33 +17,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { getUnreadCount, getNotifications, markNotificationRead, markAllNotificationsRead, Notification } from '@/lib/marketplace';
 import { toast } from 'sonner';
 
-const goToMainSite = async (path: string) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session) {
-    const { access_token, refresh_token } = session;
-    window.location.href = `${MAIN_SITE_URL}${path}#access_token=${access_token}&refresh_token=${refresh_token}&token_type=bearer&type=recovery`;
-  } else {
-    window.location.href = `${MAIN_SITE_URL}/auth`;
-  }
-};
-
-const MAIN_SITE_URL = import.meta.env.VITE_MAIN_SITE_URL || 'http://localhost:3000';
-
-function MainSiteLink({ href, children, className, onClick: extraOnClick, ...props }: { href: string; children: React.ReactNode; className?: string; onClick?: React.MouseEventHandler<HTMLAnchorElement>; [key: string]: unknown }) {
-  const handleClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
-    e.preventDefault();
-    await goToMainSite(href);
-    extraOnClick?.(e);
-  };
-
-  return (
-    <a href={`${MAIN_SITE_URL}${href}`} onClick={handleClick} className={className} {...props}>
-      {children}
-    </a>
-  );
-}
-
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -58,6 +31,33 @@ export function Navbar() {
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [loadingNotifs, setLoadingNotifs] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  const mainSiteUrl = config.main_site_url || import.meta.env.VITE_MAIN_SITE_URL || 'http://localhost:3000';
+
+  const goToMainSite = async (path: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const { access_token, refresh_token } = session;
+      window.location.href = `${mainSiteUrl}${path}#access_token=${access_token}&refresh_token=${refresh_token}&token_type=bearer&type=recovery`;
+    } else {
+      window.location.href = `${mainSiteUrl}/auth`;
+    }
+  };
+
+  function MainSiteLink({ href, children, className, onClick: extraOnClick, ...props }: { href: string; children: React.ReactNode; className?: string; onClick?: React.MouseEventHandler<HTMLAnchorElement>; [key: string]: unknown }) {
+    const handleClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      e.preventDefault();
+      await goToMainSite(href);
+      extraOnClick?.(e);
+    };
+
+    return (
+      <a href={`${mainSiteUrl}${href}`} onClick={handleClick} className={className} {...props}>
+        {children}
+      </a>
+    );
+  }
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
