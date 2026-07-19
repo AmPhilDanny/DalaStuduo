@@ -6,7 +6,7 @@
 |------|------|-----|
 | Skillbridge frontend | **Vercel** | `skillbridge-xxx.vercel.app` |
 | Admin dashboard | **Vercel** | `admin-xxx.vercel.app` |
-| Express API server | **Render** (keep) | `dalastudioshowcase.onrender.com` |
+| Express API server | **Render** (keep) | `novaxstudioshowcase.onrender.com` |
 | Database | **Supabase** (already hosted) | — |
 
 ---
@@ -37,7 +37,7 @@ Once deployed, set the env var in Vercel dashboard:
 2. Add:
    - `VITE_SUPABASE_URL` = your Supabase URL
    - `VITE_SUPABASE_ANON_KEY` = your Supabase anon key  
-   - `VITE_API_URL` = `https://dalastudioshowcase.onrender.com/api`
+   - `VITE_API_URL` = `https://novaxstudioshowcase.onrender.com/api`
 3. Go to **Deployments** → find the latest → **Redeploy**
 
 ### Admin dashboard
