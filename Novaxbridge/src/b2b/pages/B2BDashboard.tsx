@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Building2, Users, Briefcase, Eye, Plus, ArrowRight,
   Mail, Search, TrendingUp, UserPlus, Sparkles, Loader2,
-  FileText, Settings,
+  FileText, Settings, BarChart3,
 } from 'lucide-react';
 
 interface OrgStat {
@@ -144,6 +144,11 @@ export default function B2BDashboard() {
   }
 
   const showUpgrade = plan?.slug === 'free' || !plan;
+
+  // ── Derived organization metrics ──
+  const appsPerJob = stats.activeJobs > 0 ? (stats.applications / stats.activeJobs).toFixed(1) : '—';
+  const interviewRate = stats.applications > 0 ? Math.round((stats.interviews / stats.applications) * 100) : 0;
+  const activeRatio = stats.totalJobs > 0 ? Math.round((stats.activeJobs / stats.totalJobs) * 100) : 0;
 
   return (
     <div className="space-y-8">
@@ -433,6 +438,56 @@ export default function B2BDashboard() {
           </Card>
         </div>
       </div>
+
+      {/* ── Organization Metrics ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-emerald-600" />
+            Organization Metrics
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Apps per Job</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{appsPerJob}</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {stats.activeJobs > 0
+                  ? `${stats.applications} apps ÷ ${stats.activeJobs} active jobs`
+                  : 'No active jobs to measure'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Interview Rate</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-bold text-gray-900">{interviewRate}%</span>
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {stats.applications > 0
+                  ? `${stats.interviews} interviewed of ${stats.applications} applicants`
+                  : 'No applications yet'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Active Ratio</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-bold text-gray-900">{activeRatio}%</span>
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {stats.totalJobs > 0
+                  ? `${stats.activeJobs} active of ${stats.totalJobs} total`
+                  : 'No jobs posted'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Team</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.teamMembers}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Current members</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
