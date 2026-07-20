@@ -4,6 +4,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Shield, Clock, XCircle, Building2, Loader2, Sparkles, ArrowRight, Video } from 'lucide-react';
 import { getVerification, type OrgVerification } from '../../lib/api';
+import { useAuth } from '@/hooks/useAuth';
+import LiveMeetingBanner from '../meetings/LiveMeetingBanner';
 
 const orgNavItems = [
   { to: '/b2b/team', label: 'Team' },
@@ -143,8 +145,12 @@ function VerificationGate({ children }: { children: React.ReactNode }) {
 }
 
 export default function OrgSubnav() {
+  const { profile } = useAuth();
+  const userName = profile?.full_name || profile?.email || 'User';
+
   return (
     <VerificationGate>
+      <LiveMeetingBanner userName={userName} />
       <div className="sticky top-16 z-30 w-full border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
         <div className="mx-auto max-w-6xl px-4 lg:px-8">
           <div className="flex items-center gap-6 overflow-x-auto">
