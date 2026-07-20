@@ -640,6 +640,28 @@ b2bRouter.post('/verification/upload', verificationUpload.single('file'), async 
   res.json({ data: { url: urlData?.publicUrl || null, path: filePath } });
 });
 
+// POST /billing/upload-proof — upload payment proof document
+b2bRouter.post('/billing/upload-proof', verificationUpload.single('file'), async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const f = (req as any).file as { originalname: string; buffer: Buffer; mimetype: string } | undefined;
+  if (!f) throw new AppError(400, 'No file provided');
+
+  const fileName = `${Date.now()}-${f.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+  const filePath = `payments/${userOrg.org.id}/${fileName}`;
+
+  const { error: uploadError } = await adminClient.storage.from('org-documents').upload(filePath, f.buffer, {
+    contentType: f.mimetype,
+    upsert: true,
+  });
+
+  if (uploadError) throw new AppError(500, uploadError.message);
+
+  const { data: urlData } = adminClient.storage.from('org-documents').getPublicUrl(filePath);
+  res.json({ data: { url: urlData?.publicUrl || null, path: filePath } });
+});
+
 // GET /verification — get current org's verification status
 b2bRouter.get('/verification', async (req: Request, res: Response) => {
   const userOrg = await getUserOrg(req.user!.id);
@@ -813,6 +835,49 @@ b2bRouter.get('/billing/history', async (req: Request, res: Response) => {
     if (err instanceof AppError) throw err;
     res.json({ data: [], count: 0, limit, offset });
   }
+});
+
+// ════════════════════════════════════════
+// BILLING — PAYMENTS
+// ════════════════════════════════════════
+
+// POST /billing/manual-payment — submit an offline payment
+b2bRouter.post('/billing/manual-payment', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const { plan_id, amount, proof_url } = req.body;
+  if (!plan_id || !amount) throw new AppError(400, 'plan_id and amount required');
+
+  const { data, error } = await adminClient
+    .from('billing_payments')
+    .insert({
+      org_id: userOrg.org.id,
+      plan_id,
+      amount,
+      currency: 'NGN',
+      payment_method: 'offline',
+      status: 'pending',
+      proof_url: proof_url || null,
+    })
+    .select()
+    .single();
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// GET /billing/payments — current org's payment history
+b2bRouter.get('/billing/payments', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const { data, error } = await adminClient
+    .from('billing_payments')
+    .select('*, plan:plan_id(id, name, slug)')
+    .eq('org_id', userOrg.org.id)
+    .order('created_at', { ascending: false });
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
 });
 
 // ════════════════════════════════════════

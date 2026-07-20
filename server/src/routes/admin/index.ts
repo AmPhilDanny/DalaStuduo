@@ -1573,3 +1573,78 @@ adminRouter.delete('/conversations/:id/messages/:msgId', async (req: Request, re
 
   res.json({ data: { id: msgId, deleted: true } });
 });
+
+// ════════════════════════════════════════
+// BILLING — PAYMENT MANAGEMENT
+// ════════════════════════════════════════
+
+// GET /admin/billing/payments — list all payments (with org+plan info)
+adminRouter.get('/billing/payments', async (req: Request, res: Response) => {
+  const statusFilter = req.query.status as string | undefined;
+  let query = adminClient
+    .from('billing_payments')
+    .select('*, org:org_id(id, name), plan:plan_id(id, name, slug), reviewed_by_profile:reviewed_by(id, full_name)')
+    .order('created_at', { ascending: false });
+  if (statusFilter) query = query.eq('status', statusFilter);
+  const { data, error } = await query;
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// PATCH /admin/billing/payments/:id/approve — approve an offline payment
+adminRouter.patch('/billing/payments/:id/approve', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { admin_notes } = req.body || {};
+
+  const { data: payment } = await adminClient.from('billing_payments').select('*, plan:plan_id(id, name, slug)').eq('id', id).single();
+  if (!payment) throw new AppError(404, 'Payment not found');
+  if (payment.status !== 'pending') throw new AppError(400, 'Payment already processed');
+
+  // Approve the payment
+  const { data, error } = await adminClient
+    .from('billing_payments')
+    .update({ status: 'approved', reviewed_by: req.user?.id, reviewed_at: new Date().toISOString(), admin_notes: admin_notes || null })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw new AppError(500, error.message);
+
+  // Activate the plan for the org
+  await adminClient.from('organizations').update({
+    subscription_plan_id: payment.plan_id,
+    subscription_starts_at: new Date().toISOString(),
+    subscription_ends_at: null,
+  }).eq('id', payment.org_id);
+
+  // Log billing history
+  await adminClient.from('billing_history').insert({
+    org_id: payment.org_id,
+    to_plan_id: payment.plan_id,
+    change_type: 'plan_change',
+    amount: payment.amount,
+    billing_cycle: 'monthly',
+    changed_by: req.user?.id,
+  }).maybeSingle();
+
+  res.json({ data });
+});
+
+// PATCH /admin/billing/payments/:id/reject — reject an offline payment
+adminRouter.patch('/billing/payments/:id/reject', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { admin_notes } = req.body || {};
+
+  const { data: payment } = await adminClient.from('billing_payments').select('*').eq('id', id).single();
+  if (!payment) throw new AppError(404, 'Payment not found');
+  if (payment.status !== 'pending') throw new AppError(400, 'Payment already processed');
+
+  const { data, error } = await adminClient
+    .from('billing_payments')
+    .update({ status: 'rejected', reviewed_by: req.user?.id, reviewed_at: new Date().toISOString(), admin_notes: admin_notes || null })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw new AppError(500, error.message);
+
+  res.json({ data });
+});
