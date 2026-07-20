@@ -177,3 +177,46 @@ export interface UserOrgInfo {
 export interface B2BApiError {
   error: string;
 }
+
+// ── Meetings ──
+
+export interface OrgMeeting {
+  id: string;
+  org_id: string;
+  title: string;
+  description: string | null;
+  meeting_url: string;
+  room_name: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  status: 'scheduled' | 'live' | 'completed' | 'cancelled';
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  participants?: OrgMeetingParticipant[];
+}
+
+export interface OrgMeetingParticipant {
+  id: string;
+  meeting_id: string;
+  user_id: string | null;
+  email: string | null;
+  participant_type: 'member' | 'external';
+  role: 'host' | 'participant' | 'interviewer' | 'interviewee';
+  rsvp_status: 'pending' | 'accepted' | 'declined' | 'maybe';
+  notified_at: string | null;
+  joined_at: string | null;
+  created_at: string;
+}
+
+export interface OrgMeetingNotification {
+  id: string;
+  meeting_id: string;
+  org_id: string;
+  recipient_id: string;
+  type: 'scheduled' | 'updated' | 'cancelled' | 'reminder' | 'started';
+  message: string;
+  sent_at: string;
+  read_at: string | null;
+  meeting?: OrgMeeting;
+}

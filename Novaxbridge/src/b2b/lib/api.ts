@@ -799,3 +799,67 @@ export async function settleContract(contractId: string): Promise<{ data: { sett
     method: 'POST',
   });
 }
+
+// ── Meetings ──
+
+export interface ScheduleMeetingInput {
+  title: string;
+  description?: string;
+  scheduled_at: string;
+  duration_minutes?: number;
+  participant_ids?: string[];
+}
+
+export async function getMeetings(status?: string): Promise<{ data: OrgMeeting[]; count: number }> {
+  const params = status ? `?status=${status}` : '';
+  return b2bFetch<{ data: OrgMeeting[]; count: number }>(`/b2b/meetings${params}`);
+}
+
+export async function getUpcomingMeetings(): Promise<{ data: OrgMeeting[] }> {
+  return b2bFetch<{ data: OrgMeeting[] }>('/b2b/meetings/upcoming');
+}
+
+export async function getMeeting(id: string): Promise<{ data: OrgMeeting }> {
+  return b2bFetch<{ data: OrgMeeting }>(`/b2b/meetings/${id}`);
+}
+
+export async function scheduleMeeting(input: ScheduleMeetingInput): Promise<{ data: OrgMeeting }> {
+  return b2bFetch<{ data: OrgMeeting }>('/b2b/meetings', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateMeeting(id: string, updates: Partial<OrgMeeting>): Promise<{ data: OrgMeeting }> {
+  return b2bFetch<{ data: OrgMeeting }>(`/b2b/meetings/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function startMeeting(id: string): Promise<{ data: OrgMeeting }> {
+  return b2bFetch<{ data: OrgMeeting }>(`/b2b/meetings/${id}/start`, { method: 'POST' });
+}
+
+export async function endMeeting(id: string): Promise<{ data: OrgMeeting }> {
+  return b2bFetch<{ data: OrgMeeting }>(`/b2b/meetings/${id}/end`, { method: 'POST' });
+}
+
+export async function cancelMeeting(id: string): Promise<{ data: OrgMeeting }> {
+  return b2bFetch<{ data: OrgMeeting }>(`/b2b/meetings/${id}/cancel`, { method: 'POST' });
+}
+
+export async function notifyMeetingParticipants(id: string, message?: string): Promise<{ success: boolean; notified_count: number }> {
+  return b2bFetch<{ success: boolean; notified_count: number }>(`/b2b/meetings/${id}/notify`, {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+}
+
+export async function getMeetingNotifications(): Promise<{ data: OrgMeetingNotification[] }> {
+  return b2bFetch<{ data: OrgMeetingNotification[] }>('/b2b/meetings/notifications');
+}
+
+export async function markNotificationRead(id: string): Promise<{ success: boolean }> {
+  return b2bFetch<{ success: boolean }>(`/b2b/meetings/notifications/${id}/read`, { method: 'POST' });
+}
