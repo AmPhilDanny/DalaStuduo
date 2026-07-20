@@ -641,6 +641,52 @@ export async function changeSubscriptionPlan(planSlug: string, billingCycle: 'mo
   });
 }
 
+export interface BillingPayment {
+  id: string;
+  org_id: string;
+  plan_id: string;
+  amount: number;
+  currency: string;
+  payment_method: 'gateway' | 'offline';
+  status: 'pending' | 'approved' | 'rejected';
+  proof_url: string | null;
+  admin_notes: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  plan?: { id: string; name: string; slug: string } | null;
+}
+
+// POST /b2b/billing/manual-payment — submit offline payment
+export async function submitManualPayment(data: { plan_id: string; amount: number; proof_url?: string }): Promise<{ data: BillingPayment }> {
+  return b2bFetch<{ data: BillingPayment }>('/b2b/billing/manual-payment', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+// GET /b2b/billing/payments — list org's payments
+export async function getBillingPayments(): Promise<{ data: BillingPayment[] }> {
+  return b2bFetch<{ data: BillingPayment[] }>('/b2b/billing/payments');
+}
+
+// POST /b2b/billing/upload-proof — upload payment proof document
+export async function uploadPaymentProof(file: File): Promise<{ data: { url: string; path: string } }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`${API_BASE}/b2b/billing/upload-proof`, {
+    method: 'POST',
+    headers: await getAuthHeaders(),
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new B2BApiError('SERVER_ERROR', body.error || 'Upload failed', res.status);
+  }
+  return res.json();
+}
+
 // ── Branding ──
 
 export interface OrgBranding {
