@@ -131,7 +131,7 @@ function App() {
               <Route path="/b2b" element={
                 <OrgProvider>
                   <OrgSubnav />
-                  <div className="pt-12 pb-12 px-4 lg:px-8">
+                  <div className="pt-16 pb-12 px-4 lg:px-8">
                     <div className="mx-auto max-w-6xl">
                       <Outlet />
                     </div>
