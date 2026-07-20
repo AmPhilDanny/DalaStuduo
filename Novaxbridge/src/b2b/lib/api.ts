@@ -55,40 +55,65 @@ async function b2bFetch<T>(path: string, options?: RequestInit): Promise<T> {
     throw new B2BApiError('AUTH_ERROR', 'No active session');
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`${API_BASE}${path}`, {
-      method: options?.method || 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-        ...(options?.headers as Record<string, string>),
-      },
-      body: options?.body || undefined,
-    });
-  } catch {
-    throw new B2BApiError('NETWORK_ERROR', 'Failed to connect to the server');
-  }
+  const MAX_RETRIES = 2;
+  let lastError: Error | null = null;
 
-  if (!res.ok) {
-    switch (res.status) {
-      case 401:
-      case 403:
-        throw new B2BApiError('AUTH_ERROR', `Access denied (${res.status})`, res.status);
-      case 404:
-        throw new B2BApiError('NOT_FOUND', 'Resource not found', res.status);
-      case 500:
-      case 502:
-      case 503:
-        throw new B2BApiError('SERVER_ERROR', `Server error (${res.status})`, res.status);
-      default: {
-        const body = await res.json().catch(() => ({ error: res.statusText }));
-        throw new B2BApiError('SERVER_ERROR', body.error || `Request failed (${res.status})`, res.status);
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: options?.method || 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+          ...(options?.headers as Record<string, string>),
+        },
+        body: options?.body || undefined,
+        signal: options?.signal,
+      });
+
+      if (!res.ok) {
+        switch (res.status) {
+          case 401:
+          case 403:
+            throw new B2BApiError('AUTH_ERROR', `Access denied (${res.status})`, res.status);
+          case 404:
+            throw new B2BApiError('NOT_FOUND', 'Resource not found', res.status);
+          case 500:
+          case 502:
+          case 503:
+            if (attempt < MAX_RETRIES) {
+              lastError = new B2BApiError('SERVER_ERROR', `Server error (${res.status})`, res.status);
+              await sleep(1000 * (attempt + 1));
+              continue;
+            }
+            throw new B2BApiError('SERVER_ERROR', `Server error (${res.status})`, res.status);
+          default: {
+            const body = await res.json().catch(() => ({ error: res.statusText }));
+            throw new B2BApiError('SERVER_ERROR', body.error || `Request failed (${res.status})`, res.status);
+          }
+        }
       }
+
+      return res.json();
+    } catch (err) {
+      if (err instanceof B2BApiError) throw err;
+      // Don't retry if request was intentionally aborted
+      if (err instanceof DOMException && err.name === 'AbortError') throw err;
+      // NetworkError — retry with backoff
+      if (attempt < MAX_RETRIES) {
+        lastError = err instanceof Error ? err : new Error('Unknown network error');
+        await sleep(1000 * (attempt + 1));
+        continue;
+      }
+      throw new B2BApiError('NETWORK_ERROR', 'Failed to connect to the server');
     }
   }
 
-  return res.json();
+  throw lastError || new B2BApiError('NETWORK_ERROR', 'Failed to connect to the server');
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // ── Org CRUD ──

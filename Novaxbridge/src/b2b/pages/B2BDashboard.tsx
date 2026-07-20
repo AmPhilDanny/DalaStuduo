@@ -199,7 +199,7 @@ export default function B2BDashboard() {
   return (
     <div className="space-y-6">
       {/* ── Header Hero ── */}
-      <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-700 via-purple-600 to-indigo-700 p-6 sm:p-8">
+      <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-700 via-purple-600 to-indigo-700 p-6 sm:p-8 mt-4 sm:mt-6">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3" />
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-1/3 -translate-x-1/4" />
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
