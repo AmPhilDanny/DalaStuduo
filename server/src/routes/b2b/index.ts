@@ -969,6 +969,275 @@ b2bRouter.get('/analytics/overview', async (req: Request, res: Response) => {
 });
 
 // ════════════════════════════════════════
+// MEETINGS
+// ════════════════════════════════════════
+
+// GET /meetings — list org meetings
+b2bRouter.get('/meetings', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const status = req.query.status as string | undefined;
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  let query = adminClient
+    .from('org_meetings')
+    .select('*, participants:org_meeting_participants(*)')
+    .eq('org_id', userOrg.org.id);
+
+  if (status) {
+    const statuses = status.split(',');
+    query = query.in('status', statuses);
+  }
+
+  const { data, error, count } = await query
+    .order('scheduled_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) {
+    if (error.code === '42P01') return res.json({ data: [], count: 0 });
+    throw new AppError(500, error.message);
+  }
+
+  res.json({ data: data || [], count, limit, offset });
+});
+
+// GET /meetings/upcoming — get upcoming meetings (scheduled or live)
+b2bRouter.get('/meetings/upcoming', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const { data, error } = await adminClient
+    .from('org_meetings')
+    .select('*, participants:org_meeting_participants(*)')
+    .eq('org_id', userOrg.org.id)
+    .in('status', ['scheduled', 'live'])
+    .gte('scheduled_at', new Date(Date.now() - 86400000).toISOString())
+    .order('scheduled_at', { ascending: true });
+
+  if (error) {
+    if (error.code === '42P01') return res.json({ data: [] });
+    throw new AppError(500, error.message);
+  }
+
+  res.json({ data: data || [] });
+});
+
+// POST /meetings — schedule a new meeting
+b2bRouter.post('/meetings', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+  requireRole(userOrg.role, ORG_MANAGER_ROLES);
+
+  const { title, description, scheduled_at, duration_minutes, participant_ids } = req.body;
+  if (!title || !scheduled_at) throw new AppError(400, 'Title and scheduled time are required');
+
+  const roomName = `b2b-${userOrg.org.slug}-${Date.now().toString(36)}`;
+  const meetingUrl = `https://meet.jit.si/${encodeURIComponent(roomName)}`;
+
+  const { data: meeting, error } = await adminClient
+    .from('org_meetings')
+    .insert({
+      org_id: userOrg.org.id,
+      title,
+      description: description || null,
+      meeting_url: meetingUrl,
+      room_name: roomName,
+      scheduled_at,
+      duration_minutes: duration_minutes || 60,
+      status: 'scheduled',
+      created_by: req.user!.id,
+    })
+    .select()
+    .single();
+
+  if (error) throw new AppError(500, error.message);
+
+  if (participant_ids && Array.isArray(participant_ids) && participant_ids.length > 0) {
+    const participantRows = participant_ids.map((userId: string, i: number) => ({
+      meeting_id: meeting.id,
+      user_id: userId,
+      participant_type: 'member',
+      role: i === 0 ? 'host' : 'participant',
+    }));
+
+    const { error: partErr } = await adminClient
+      .from('org_meeting_participants')
+      .insert(participantRows);
+
+    if (partErr) console.error('Failed to add participants:', partErr);
+  }
+
+  await logAudit(req.user!.id, 'schedule_meeting', 'org_meetings', meeting.id, { title, scheduled_at });
+  res.status(201).json({ data: meeting });
+});
+
+// PATCH /meetings/:id — update a meeting
+b2bRouter.patch('/meetings/:id', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+  requireRole(userOrg.role, ORG_MANAGER_ROLES);
+
+  const allowed = ['title', 'description', 'scheduled_at', 'duration_minutes', 'status'];
+  const updates: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) updates[key] = req.body[key];
+  }
+
+  const { data, error } = await adminClient
+    .from('org_meetings')
+    .update(updates)
+    .eq('id', req.params.id)
+    .eq('org_id', userOrg.org.id)
+    .select()
+    .single();
+
+  if (error) throw new AppError(500, error.message);
+  await logAudit(req.user!.id, 'update_meeting', 'org_meetings', data.id, updates);
+  res.json({ data });
+});
+
+// POST /meetings/:id/start — start a meeting (set to live)
+b2bRouter.post('/meetings/:id/start', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const { data, error } = await adminClient
+    .from('org_meetings')
+    .update({ status: 'live' })
+    .eq('id', req.params.id)
+    .eq('org_id', userOrg.org.id)
+    .in('status', ['scheduled'])
+    .select()
+    .single();
+
+  if (error) throw new AppError(500, error.message);
+  if (!data) throw new AppError(400, 'Meeting cannot be started (not found or already started)');
+
+  res.json({ data });
+});
+
+// POST /meetings/:id/end — end a meeting
+b2bRouter.post('/meetings/:id/end', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const { data, error } = await adminClient
+    .from('org_meetings')
+    .update({ status: 'completed' })
+    .eq('id', req.params.id)
+    .eq('org_id', userOrg.org.id)
+    .eq('status', 'live')
+    .select()
+    .single();
+
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// POST /meetings/:id/cancel — cancel a meeting
+b2bRouter.post('/meetings/:id/cancel', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+  requireRole(userOrg.role, ORG_MANAGER_ROLES);
+
+  const { data, error } = await adminClient
+    .from('org_meetings')
+    .update({ status: 'cancelled' })
+    .eq('id', req.params.id)
+    .eq('org_id', userOrg.org.id)
+    .select()
+    .single();
+
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// POST /meetings/:id/notify — send notification to all participants
+b2bRouter.post('/meetings/:id/notify', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const { data: meeting } = await adminClient
+    .from('org_meetings')
+    .select('*, participants:org_meeting_participants(*)')
+    .eq('id', req.params.id)
+    .eq('org_id', userOrg.org.id)
+    .single();
+
+  if (!meeting) throw new AppError(404, 'Meeting not found');
+
+  const participantUserIds = (meeting.participants || [])
+    .filter((p: any) => p.user_id)
+    .map((p: any) => p.user_id);
+
+  if (participantUserIds.length > 0) {
+    const message = req.body.message || `Reminder: Meeting "${meeting.title}" at ${new Date(meeting.scheduled_at).toLocaleString()}`;
+    const notifications = participantUserIds.map((userId: string) => ({
+      meeting_id: meeting.id,
+      org_id: userOrg.org.id,
+      recipient_id: userId,
+      type: 'reminder',
+      message,
+    }));
+
+    const { error: notifErr } = await adminClient
+      .from('org_meeting_notifications')
+      .insert(notifications);
+
+    if (notifErr) throw new AppError(500, notifErr.message);
+  }
+
+  res.json({ success: true, notified_count: participantUserIds.length });
+});
+
+// GET /meetings/:id — get single meeting detail
+b2bRouter.get('/meetings/:id', async (req: Request, res: Response) => {
+  const userOrg = await getUserOrg(req.user!.id);
+  if (!userOrg) throw new AppError(404, 'No organization found');
+
+  const { data, error } = await adminClient
+    .from('org_meetings')
+    .select('*, participants:org_meeting_participants(*)')
+    .eq('id', req.params.id)
+    .eq('org_id', userOrg.org.id)
+    .single();
+
+  if (error) throw new AppError(404, 'Meeting not found');
+  res.json({ data });
+});
+
+// GET /meetings/notifications — get notifications for current user
+b2bRouter.get('/meetings/notifications', async (req: Request, res: Response) => {
+  const { data, error } = await adminClient
+    .from('org_meeting_notifications')
+    .select('*, meeting:meeting_id(*)')
+    .eq('recipient_id', req.user!.id)
+    .order('sent_at', { ascending: false })
+    .limit(50);
+
+  if (error) {
+    if (error.code === '42P01') return res.json({ data: [] });
+    throw new AppError(500, error.message);
+  }
+
+  res.json({ data: data || [] });
+});
+
+// POST /meetings/notifications/:id/read — mark notification as read
+b2bRouter.post('/meetings/notifications/:id/read', async (req: Request, res: Response) => {
+  const { error } = await adminClient
+    .from('org_meeting_notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('id', req.params.id)
+    .eq('recipient_id', req.user!.id);
+
+  if (error) throw new AppError(500, error.message);
+  res.json({ success: true });
+});
+
+// ════════════════════════════════════════
 // COMPLIANCE — REPORTS
 // ════════════════════════════════════════
 
