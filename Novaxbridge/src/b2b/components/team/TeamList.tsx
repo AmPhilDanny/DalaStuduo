@@ -173,6 +173,7 @@ export default function TeamList() {
             </DialogContent>
           </Dialog>
         )}
+        </div>
       </div>
 
       {/* Members table */}
