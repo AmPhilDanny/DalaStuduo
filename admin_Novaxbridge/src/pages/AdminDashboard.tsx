@@ -2840,17 +2840,59 @@ export default function AdminDashboard() {
 
       {/* ═══ B2B: Review Verification Dialog ═══ */}
       <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Shield className="w-4 h-4 text-secondary" /> {reviewingStatus === 'verified' ? 'Approve' : 'Reject'} Verification</DialogTitle></DialogHeader>
           {reviewingVerification && (
-            <div className="space-y-3 pt-2">
-              <div className="text-sm space-y-1">
-                <p><span className="text-muted-foreground">Org:</span> {reviewingVerification.organization?.name || '—'}</p>
-                <p><span className="text-muted-foreground">Business:</span> {reviewingVerification.business_name || '—'}</p>
-                <p><span className="text-muted-foreground">Reg #:</span> {reviewingVerification.registration_number || '—'}</p>
+            <div className="space-y-4 pt-2 max-h-[70vh] overflow-y-auto">
+              {/* Submission Summary */}
+              <div className="rounded-lg border bg-gray-50 p-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Submission Details</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div><span className="text-muted-foreground">Organization</span><p className="font-medium">{reviewingVerification.organization?.name || '—'}</p></div>
+                  <div><span className="text-muted-foreground">Business Name</span><p className="font-medium">{reviewingVerification.business_name || '—'}</p></div>
+                  <div><span className="text-muted-foreground">Registration #</span><p className="font-mono text-xs">{reviewingVerification.registration_number || '—'}</p></div>
+                  <div><span className="text-muted-foreground">Tax ID</span><p className="font-mono text-xs">{reviewingVerification.tax_id || '—'}</p></div>
+                  <div><span className="text-muted-foreground">Submitted</span><p className="text-xs">{new Date(reviewingVerification.created_at).toLocaleString()}</p></div>
+                  <div><span className="text-muted-foreground">Status</span><Badge variant="outline" className={`text-xs capitalize ${
+                    reviewingVerification.status === 'pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                    reviewingVerification.status === 'verified' ? 'bg-green-50 text-green-700 border-green-200' :
+                    'bg-red-50 text-red-700 border-red-200'
+                  }`}>{reviewingVerification.status}</Badge></div>
+                </div>
               </div>
+
+              {/* Submitted Documents */}
+              {reviewingVerification.document_urls?.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Documents ({reviewingVerification.document_urls.length})</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {reviewingVerification.document_urls.map((url: string, i: number) => (
+                      <div key={i} className="flex items-center justify-between p-3 rounded-lg border bg-white">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <FileText className="w-5 h-5 text-purple-600 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">Document {i + 1}</p>
+                            <p className="text-xs text-gray-400 truncate">{url.split('/').pop() || url}</p>
+                          </div>
+                        </div>
+                        <a href={url} target="_blank" rel="noopener noreferrer"
+                          className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors">
+                          <ExternalLink className="w-3 h-3" />
+                          View
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Review Notes */}
               <Separator />
-              <div><Label>Review Notes</Label><Textarea value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} placeholder="Optional notes about this decision..." rows={3} /></div>
+              <div>
+                <Label>Review Notes</Label>
+                <Textarea value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} placeholder="Add notes about this decision..." rows={3} className="mt-1" />
+              </div>
+
               <DialogFooter className="gap-2 pt-2">
                 <Button variant="outline" onClick={() => setReviewDialogOpen(false)} disabled={reviewProcessing}>Cancel</Button>
                 <Button className={reviewingStatus === 'verified' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} onClick={handleReviewVerification} disabled={reviewProcessing}>
