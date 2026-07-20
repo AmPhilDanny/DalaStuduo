@@ -44,6 +44,7 @@ import ContractList from "@/b2b/components/contracts/ContractList";
 import ComplianceDashboard from "@/b2b/components/compliance/ComplianceDashboard";
 import AnalyticsDashboard from "@/b2b/components/analytics/AnalyticsDashboard";
 import B2BDashboard from "@/b2b/pages/B2BDashboard";
+import MeetingsPage from "@/b2b/components/meetings/MeetingsPage";
 import SettingsPage from "@/b2b/components/settings/SettingsPage";
 import { OrgProvider } from "@/b2b/hooks/useOrg";
 
@@ -130,7 +131,7 @@ function App() {
               <Route path="/b2b" element={
                 <OrgProvider>
                   <OrgSubnav />
-                  <div className="pt-8 pb-12 px-4 lg:px-8">
+                  <div className="pt-12 pb-12 px-4 lg:px-8">
                     <div className="mx-auto max-w-6xl">
                       <Outlet />
                     </div>
@@ -146,6 +147,7 @@ function App() {
                 <Route path="contracts" element={<ContractList />} />
                 <Route path="compliance" element={<ComplianceDashboard />} />
                 <Route path="analytics" element={<AnalyticsDashboard />} />
+                <Route path="meetings" element={<MeetingsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>
             </Routes>

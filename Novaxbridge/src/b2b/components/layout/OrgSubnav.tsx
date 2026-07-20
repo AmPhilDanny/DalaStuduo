@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Shield, Clock, XCircle, Building2, Loader2, Sparkles, ArrowRight } from 'lucide-react';
+import { Shield, Clock, XCircle, Building2, Loader2, Sparkles, ArrowRight, Video } from 'lucide-react';
 import { getVerification, type OrgVerification } from '../../lib/api';
 
 const orgNavItems = [
@@ -12,6 +12,7 @@ const orgNavItems = [
   { to: '/b2b/hiring', label: 'Hiring' },
   { to: '/b2b/hiring/pipeline', label: 'Pipeline' },
   { to: '/b2b/contracts', label: 'Contracts' },
+  { to: '/b2b/meetings', label: 'Meetings' },
   { to: '/b2b/compliance', label: 'Compliance' },
   { to: '/b2b/analytics', label: 'Analytics' },
   { to: '/b2b/settings', label: 'Settings' },

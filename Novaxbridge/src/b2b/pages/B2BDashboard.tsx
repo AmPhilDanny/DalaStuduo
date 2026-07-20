@@ -18,8 +18,9 @@ import {
   XCircle, Clock, Handshake,
   ChevronRight, Activity,
 } from 'lucide-react';
-import { getVerification, getAnalyticsOverview, getContracts } from '../lib/api';
-import type { OrgVerification, AnalyticsOverview, Contract } from '../lib/api';
+import { getVerification, getAnalyticsOverview, getContracts, getUpcomingMeetings } from '../lib/api';
+import type { OrgVerification, AnalyticsOverview, Contract, OrgMeeting } from '../lib/api';
+import MeetingsSection from '../components/meetings/MeetingsSection';
 
 interface OrgStat {
   activeJobs: number;
@@ -82,6 +83,8 @@ export default function B2BDashboard() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
   const [verification, setVerification] = useState<OrgVerification | null>(null);
+  const [meetings, setMeetings] = useState<OrgMeeting[]>([]);
+  const [meetingsLoading, setMeetingsLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -91,6 +94,7 @@ export default function B2BDashboard() {
       fetchVerification();
       fetchContracts();
       fetchAnalytics();
+      fetchMeetings();
     }
   }, [org?.id, user]);
 
@@ -113,6 +117,15 @@ export default function B2BDashboard() {
       const data = await getAnalyticsOverview();
       setAnalytics(data);
     } catch { /* silent */ }
+  };
+
+  const fetchMeetings = async () => {
+    setMeetingsLoading(true);
+    try {
+      const res = await getUpcomingMeetings();
+      setMeetings(res.data || []);
+    } catch { /* silent */ }
+    finally { setMeetingsLoading(false); }
   };
 
   const fetchDashboard = async () => {
@@ -302,6 +315,17 @@ export default function B2BDashboard() {
             </Button>
           </CardContent>
         </Card>
+      )}
+
+      {/* ── Meetings Section ── */}
+      {meetings.length > 0 && (
+        <MeetingsSection
+          meetings={meetings}
+          loading={meetingsLoading}
+          userName={profile?.full_name || profile?.email || 'User'}
+          onRefresh={fetchMeetings}
+          showScheduleButton={true}
+        />
       )}
 
       {/* ── Key Metrics Grid ── */}
