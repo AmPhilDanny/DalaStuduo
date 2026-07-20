@@ -13,18 +13,21 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, UserPlus, X, Mail, Clock } from 'lucide-react';
+import { Loader2, UserPlus, X, Mail, Clock, Video } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 import { useOrgMembers } from '../../hooks/useOrgMembers';
 import {
-  changeMemberRole, getOrgInvites, cancelInvite, inviteMember,
+  changeMemberRole, getOrgInvites, cancelInvite, inviteMember, scheduleMeeting,
 } from '../../lib/api';
 import type { OrgMember, OrgInvite } from '../../b2b-types';
 import { toast } from 'sonner';
 import { useOrg } from '../../hooks/useOrg';
 import { ORG_ROLE_LABELS, ORG_MANAGER_ROLES } from '../../lib/constants';
+import B2BVideoCall from '../meetings/B2BVideoCall';
 
 export default function TeamList() {
   const { org, role: myRole } = useOrg();
+  const { profile } = useAuth();
   const { members, isLoading, refresh, invite, remove, isInviting } = useOrgMembers();
   const [invites, setInvites] = useState<OrgInvite[]>([]);
   const [isLoadingInvites, setIsLoadingInvites] = useState(false);
@@ -33,6 +36,9 @@ export default function TeamList() {
   const [inviteRole, setInviteRole] = useState('member');
   const [removeTarget, setRemoveTarget] = useState<OrgMember | null>(null);
   const [roleChangeLoading, setRoleChangeLoading] = useState<string | null>(null);
+  const [callOpen, setCallOpen] = useState(false);
+  const [callRoomName, setCallRoomName] = useState<string | null>(null);
+  const [startingCall, setStartingCall] = useState(false);
 
   const canManage = myRole === 'owner' || myRole === 'admin';
 
@@ -98,6 +104,27 @@ export default function TeamList() {
     }
   };
 
+  const handleTeamCall = async () => {
+    setStartingCall(true);
+    try {
+      const roomName = `b2b-${org?.slug || 'team'}-${Date.now().toString(36)}`;
+      await scheduleMeeting({
+        title: 'Team Conference Call',
+        scheduled_at: new Date().toISOString(),
+        duration_minutes: 60,
+        participant_ids: members.map((m) => m.user_id).filter(Boolean) as string[],
+      });
+      setCallRoomName(roomName);
+      setCallOpen(true);
+    } catch {
+      const roomName = `b2b-${org?.slug || 'team'}-${Date.now().toString(36)}`;
+      setCallRoomName(roomName);
+      setCallOpen(true);
+    } finally {
+      setStartingCall(false);
+    }
+  };
+
   const pendingInvites = invites.filter(i => i.status === 'pending');
 
   return (
@@ -108,7 +135,12 @@ export default function TeamList() {
           <h2 className="text-lg font-semibold text-gray-900">Team Members</h2>
           <p className="text-sm text-gray-500">{members.length} member{members.length !== 1 ? 's' : ''} in your organization</p>
         </div>
-        {canManage && (
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleTeamCall} disabled={startingCall}>
+            {startingCall ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Video className="w-4 h-4 mr-2" />}
+            Team Call
+          </Button>
+          {canManage && (
           <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
             <DialogTrigger asChild>
               <Button><UserPlus className="w-4 h-4 mr-2" /> Invite Member</Button>
@@ -238,6 +270,16 @@ export default function TeamList() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {callRoomName && (
+        <B2BVideoCall
+          open={callOpen}
+          onOpenChange={(o) => { setCallOpen(o); if (!o) setCallRoomName(null); }}
+          roomName={callRoomName}
+          userName={profile?.full_name || profile?.email || 'Team Member'}
+          meetingTitle="Team Conference Call"
+        />
       )}
 
       {/* Remove confirmation */}

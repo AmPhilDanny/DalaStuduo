@@ -8,14 +8,16 @@ import { CSS } from '@dnd-kit/utilities';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, ExternalLink, CheckSquare, Square } from 'lucide-react';
+import { Loader2, ExternalLink, CheckSquare, Square, Video } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 import {
   getPipelineApplications, updatePipelineStatus, bulkUpdatePipelineStatus,
-  B2BApiError,
+  scheduleMeeting, B2BApiError,
   type PipelineApplication,
 } from '../../lib/api';
 import { toast } from 'sonner';
 import ErrorDisplay from '../ErrorDisplay';
+import B2BVideoCall from '../meetings/B2BVideoCall';
 
 const PIPELINE_COLUMNS = [
   { key: 'pending', label: 'New', color: 'bg-gray-100 text-gray-700' },
@@ -74,6 +76,7 @@ function SortableCard({
 
 function ColumnCard({ app }: { app: PipelineApplication }) {
   const [showDetail, setShowDetail] = useState(false);
+  const [interviewOpen, setInterviewOpen] = useState(false);
 
   return (
     <>
@@ -110,13 +113,82 @@ function ColumnCard({ app }: { app: PipelineApplication }) {
                 <ExternalLink className="w-3 h-3" /> View Resume
               </a>
             )}
-            <div className="flex justify-end mt-4">
+            <div className="flex justify-end gap-2 mt-4">
               <Button variant="outline" size="sm" onClick={() => setShowDetail(false)}>Close</Button>
+              <Button
+                size="sm"
+                className="bg-purple-600 hover:bg-purple-700"
+                onClick={() => setInterviewOpen(true)}
+              >
+                <Video className="w-3.5 h-3.5 mr-1" />
+                Interview
+              </Button>
             </div>
           </div>
         </div>
       )}
+
+      {interviewOpen && (
+        <InterviewCallOverlay
+          app={app}
+          onClose={() => setInterviewOpen(false)}
+        />
+      )}
     </>
+  );
+}
+
+function InterviewCallOverlay({ app, onClose }: { app: PipelineApplication; onClose: () => void }) {
+  const { profile } = useAuth();
+  const [roomName, setRoomName] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const candidateName = app.profiles?.full_name || 'Candidate';
+        await scheduleMeeting({
+          title: `Interview: ${candidateName} - ${app.jobs?.title || 'Position'}`,
+          description: `Interview with ${candidateName} for ${app.jobs?.title || 'a position'}`,
+          scheduled_at: new Date().toISOString(),
+          duration_minutes: 60,
+          participant_ids: app.student_id ? [app.student_id] : undefined,
+        });
+      } catch {
+        // continue with local room
+      }
+      setRoomName(`b2b-interview-${app.id.slice(0, 8)}-${Date.now().toString(36)}`);
+      setLoading(false);
+    })();
+  }, [app]);
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onClose}>
+        <div className="bg-white rounded-xl p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <Loader2 className="w-6 h-6 animate-spin text-purple-600 mx-auto" />
+          <p className="text-sm text-gray-500 mt-2">Preparing interview room...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="bg-white rounded-xl p-6 shadow-xl max-w-lg w-full mx-4" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Video Interview</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Interviewing: <strong>{app.profiles?.full_name || 'Candidate'}</strong> for {app.jobs?.title || 'position'}
+        </p>
+        <B2BVideoCall
+          open={true}
+          onOpenChange={(o) => { if (!o) onClose(); }}
+          roomName={roomName || 'interview-room'}
+          userName={profile?.full_name || profile?.email || 'Interviewer'}
+          meetingTitle={`Interview: ${app.profiles?.full_name || 'Candidate'}`}
+        />
+      </div>
+    </div>
   );
 }
 
