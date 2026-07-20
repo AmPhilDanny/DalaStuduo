@@ -934,8 +934,11 @@ export default function AdminDashboard() {
     const defaultFeatures = getDefaultFeatureMap();
     let planFeatures: Record<string, boolean> = { ...defaultFeatures };
     if (plan?.features) {
-      if (typeof plan.features === 'object' && !Array.isArray(plan.features)) {
-        // Merge saved features into defaults so new feature keys default to false
+      if (Array.isArray(plan.features)) {
+        for (const key of plan.features) {
+          planFeatures[key] = true;
+        }
+      } else if (typeof plan.features === 'object') {
         planFeatures = { ...defaultFeatures, ...plan.features };
       }
     }
@@ -950,10 +953,15 @@ export default function AdminDashboard() {
     if (!planForm.name.trim() || !planForm.slug.trim()) return;
     setSavingPlan(true);
     try {
+      // Convert Record<string, boolean> to string[] (only enabled features)
+      const enabledFeatures = Object.entries(planForm.features)
+        .filter(([, enabled]) => enabled)
+        .map(([key]) => key);
+
       const body = {
         name: planForm.name.trim(), slug: planForm.slug.trim(), description: planForm.description.trim() || undefined,
         price_monthly: planForm.price_monthly, price_yearly: planForm.price_yearly,
-        features: planForm.features,
+        features: enabledFeatures,
         is_active: planForm.is_active, sort_order: planForm.sort_order,
       };
       if (editingPlan) { await patch(`/admin/billing/plans/${editingPlan.id}`, body); toast.success('Plan updated'); }
