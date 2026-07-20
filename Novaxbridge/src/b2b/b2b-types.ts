@@ -2,6 +2,96 @@
 // B2B/B2A Organization Platform — TypeScript Interfaces
 // ============================================================
 
+export interface PlanFeatureDef {
+  key: string;
+  label: string;
+  description?: string;
+}
+
+export interface PlanFeatureGroup {
+  group: string;
+  label: string;
+  features: PlanFeatureDef[];
+}
+
+export const PLAN_FEATURE_GROUPS: PlanFeatureGroup[] = [
+  {
+    group: 'hiring',
+    label: 'Hiring',
+    features: [
+      { key: 'post_jobs', label: 'Post Jobs', description: 'Create and publish job listings' },
+      { key: 'bulk_posting', label: 'Bulk Posting', description: 'Post multiple jobs at once' },
+      { key: 'pipeline', label: 'Hiring Pipeline', description: 'Track applications through stages' },
+    ],
+  },
+  {
+    group: 'talent',
+    label: 'Talent Pool',
+    features: [
+      { key: 'talent_search', label: 'Talent Search', description: 'Search the talent database' },
+      { key: 'talent_lists', label: 'Talent Lists', description: 'Save and organize talent profiles' },
+      { key: 'saved_searches', label: 'Saved Searches', description: 'Save search filters for reuse' },
+    ],
+  },
+  {
+    group: 'contracts',
+    label: 'Contracts',
+    features: [
+      { key: 'contracts', label: 'Contracts', description: 'Create and manage contracts' },
+      { key: 'milestones', label: 'Milestones', description: 'Track project milestones' },
+      { key: 'e_signatures', label: 'E-Signatures', description: 'Digital contract signing' },
+    ],
+  },
+  {
+    group: 'analytics',
+    label: 'Analytics',
+    features: [
+      { key: 'dashboard', label: 'Dashboard', description: 'Organization performance overview' },
+      { key: 'reports', label: 'Reports', description: 'Generate compliance reports' },
+      { key: 'export', label: 'Data Export', description: 'Export data to CSV/PDF' },
+    ],
+  },
+  {
+    group: 'team',
+    label: 'Team',
+    features: [
+      { key: 'max_members_5', label: 'Up to 5 Members', description: 'Team size limit' },
+      { key: 'max_members_20', label: 'Up to 20 Members', description: 'Team size limit' },
+      { key: 'unlimited_members', label: 'Unlimited Members', description: 'No team size limit' },
+    ],
+  },
+  {
+    group: 'branding',
+    label: 'Branding',
+    features: [
+      { key: 'custom_branding', label: 'Custom Branding', description: 'Custom logo and colors' },
+      { key: 'custom_domain', label: 'Custom Domain', description: 'Use your own domain' },
+    ],
+  },
+];
+
+export function getDefaultFeatureMap(): Record<string, boolean> {
+  const map: Record<string, boolean> = {};
+  for (const group of PLAN_FEATURE_GROUPS) {
+    for (const feat of group.features) {
+      map[feat.key] = false;
+    }
+  }
+  return map;
+}
+
+export function featureMapToGroups(features: Record<string, boolean>): Record<string, Record<string, boolean>> {
+  const grouped: Record<string, Record<string, boolean>> = {};
+  for (const group of PLAN_FEATURE_GROUPS) {
+    const g: Record<string, boolean> = {};
+    for (const feat of group.features) {
+      g[feat.key] = features[feat.key] ?? false;
+    }
+    grouped[group.group] = g;
+  }
+  return grouped;
+}
+
 export interface SubscriptionPlan {
   id: string;
   name: string;

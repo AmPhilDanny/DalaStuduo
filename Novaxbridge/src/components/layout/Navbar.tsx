@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Rocket, LogOut, User, Bell, Package, Wallet as WalletIcon, Store, Shield, ChevronDown, LayoutDashboard, Settings, Users, MessageSquare } from 'lucide-react';
+import { Menu, X, Rocket, LogOut, User, Bell, Package, Wallet as WalletIcon, Store, Shield, ChevronDown, LayoutDashboard, Settings, Users, MessageSquare, Building2, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -251,6 +251,32 @@ export function Navbar() {
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground uppercase tracking-wider">My Organization</DropdownMenuLabel>
+                  <DropdownMenuItem asChild>
+                    <Link to="/b2b/setup" className="cursor-pointer flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      <span>Organization Setup</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/org/verification" className="cursor-pointer flex items-center gap-2">
+                      <Shield className="w-4 h-4" />
+                      <span>Verification</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/b2b" className="cursor-pointer flex items-center gap-2">
+                      <LayoutDashboard className="w-4 h-4" />
+                      <span>B2B Dashboard</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/b2b/settings" className="cursor-pointer flex items-center gap-2">
+                      <CreditCard className="w-4 h-4" />
+                      <span>Purchase Plan</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link to="/orders" className="cursor-pointer flex items-center gap-2">
                       <Package className="w-4 h-4" />
@@ -364,6 +390,25 @@ export function Navbar() {
                     <Rocket className="w-4 h-4" /> Post Job
                   </Link>
                 )}
+              </div>
+
+              <div className="my-2 border-t border-border/50"></div>
+
+              {/* Organization Links (mobile) */}
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 pb-1">Organization</p>
+              <div className="flex flex-col gap-1">
+                <Link to="/b2b/setup" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                  <Building2 className="w-4 h-4" /> Organization Setup
+                </Link>
+                <Link to="/org/verification" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                  <Shield className="w-4 h-4" /> Verification
+                </Link>
+                <Link to="/b2b" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                  <LayoutDashboard className="w-4 h-4" /> B2B Dashboard
+                </Link>
+                <Link to="/b2b/settings" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                  <CreditCard className="w-4 h-4" /> Purchase Plan
+                </Link>
               </div>
 
               <div className="my-2 border-t border-border/50"></div>

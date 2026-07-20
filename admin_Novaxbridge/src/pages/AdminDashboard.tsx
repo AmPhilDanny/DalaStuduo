@@ -207,9 +207,64 @@ export default function AdminDashboard() {
   const [planForm, setPlanForm] = useState({
     name: '', slug: '', description: '',
     price_monthly: 0, price_yearly: 0,
-    features: '', is_active: true, sort_order: 0,
+    features: {} as Record<string, boolean>,
+    is_active: true, sort_order: 0,
   });
   const [savingPlan, setSavingPlan] = useState(false);
+
+  // Plan feature group definitions for hierarchical feature UI
+  const PLAN_FEATURE_GROUPS = [
+    {
+      group: 'hiring', label: 'Hiring',
+      features: [
+        { key: 'post_jobs', label: 'Post Jobs', desc: 'Create and publish job listings' },
+        { key: 'bulk_posting', label: 'Bulk Posting', desc: 'Post multiple jobs at once' },
+        { key: 'pipeline', label: 'Hiring Pipeline', desc: 'Track applications through stages' },
+      ],
+    },
+    {
+      group: 'talent', label: 'Talent Pool',
+      features: [
+        { key: 'talent_search', label: 'Talent Search', desc: 'Search the talent database' },
+        { key: 'talent_lists', label: 'Talent Lists', desc: 'Save and organize talent profiles' },
+        { key: 'saved_searches', label: 'Saved Searches', desc: 'Save search filters for reuse' },
+      ],
+    },
+    {
+      group: 'contracts', label: 'Contracts',
+      features: [
+        { key: 'contracts', label: 'Contracts', desc: 'Create and manage contracts' },
+        { key: 'milestones', label: 'Milestones', desc: 'Track project milestones' },
+        { key: 'e_signatures', label: 'E-Signatures', desc: 'Digital contract signing' },
+      ],
+    },
+    {
+      group: 'analytics', label: 'Analytics',
+      features: [
+        { key: 'dashboard', label: 'Dashboard', desc: 'Organization performance overview' },
+        { key: 'reports', label: 'Reports', desc: 'Generate compliance reports' },
+        { key: 'export', label: 'Data Export', desc: 'Export data to CSV/PDF' },
+      ],
+    },
+    {
+      group: 'branding', label: 'Branding',
+      features: [
+        { key: 'custom_branding', label: 'Custom Branding', desc: 'Custom logo and colors' },
+        { key: 'custom_domain', label: 'Custom Domain', desc: 'Use your own domain' },
+      ],
+    },
+  ];
+
+  /** Build default feature map (all false) from the group definitions */
+  const getDefaultFeatureMap = () => {
+    const map: Record<string, boolean> = {};
+    for (const group of PLAN_FEATURE_GROUPS) {
+      for (const feat of group.features) {
+        map[feat.key] = false;
+      }
+    }
+    return map;
+  };
 
   // B2B — Contracts
   const [contracts, setContracts] = useState<any[]>([]);
@@ -876,10 +931,18 @@ export default function AdminDashboard() {
   useEffect(() => { if (user && isAdminAccess) fetchPlans(); }, [user, isAdminAccess, fetchPlans]);
 
   const resetPlanForm = (plan?: any) => {
+    const defaultFeatures = getDefaultFeatureMap();
+    let planFeatures: Record<string, boolean> = { ...defaultFeatures };
+    if (plan?.features) {
+      if (typeof plan.features === 'object' && !Array.isArray(plan.features)) {
+        // Merge saved features into defaults so new feature keys default to false
+        planFeatures = { ...defaultFeatures, ...plan.features };
+      }
+    }
     setPlanForm({
       name: plan?.name || '', slug: plan?.slug || '', description: plan?.description || '',
       price_monthly: plan?.price_monthly ?? 0, price_yearly: plan?.price_yearly ?? 0,
-      features: Array.isArray(plan?.features) ? plan.features.join(', ') : (typeof plan?.features === 'string' ? plan.features : ''), is_active: plan?.is_active ?? true, sort_order: plan?.sort_order ?? 0,
+      features: planFeatures, is_active: plan?.is_active ?? true, sort_order: plan?.sort_order ?? 0,
     });
   };
 
@@ -890,7 +953,7 @@ export default function AdminDashboard() {
       const body = {
         name: planForm.name.trim(), slug: planForm.slug.trim(), description: planForm.description.trim() || undefined,
         price_monthly: planForm.price_monthly, price_yearly: planForm.price_yearly,
-        features: planForm.features.split(',').map(s => s.trim()).filter(Boolean),
+        features: planForm.features,
         is_active: planForm.is_active, sort_order: planForm.sort_order,
       };
       if (editingPlan) { await patch(`/admin/billing/plans/${editingPlan.id}`, body); toast.success('Plan updated'); }
@@ -2193,7 +2256,7 @@ export default function AdminDashboard() {
                 ) : (
                   <Table>
                     <TableHeader>
-                      <TableRow><TableHead>Name</TableHead><TableHead>Slug</TableHead><TableHead>Monthly</TableHead><TableHead>Yearly</TableHead><TableHead>Features</TableHead><TableHead>Active</TableHead><TableHead>Sort</TableHead><TableHead className="text-right">Actions</TableHead></TableRow>
+                      <TableRow><TableHead>Name</TableHead><TableHead>Slug</TableHead><TableHead>Monthly</TableHead><TableHead>Yearly</TableHead><TableHead>Active Features</TableHead><TableHead>Active</TableHead><TableHead>Sort</TableHead><TableHead className="text-right">Actions</TableHead></TableRow>
                     </TableHeader>
                     <TableBody>
                       {plans.map((plan: any) => (
@@ -2204,8 +2267,22 @@ export default function AdminDashboard() {
                           <TableCell>${Number(plan.price_yearly).toFixed(2)}</TableCell>
                           <TableCell className="max-w-[200px]">
                             <div className="flex flex-wrap gap-1">
-                              {(() => { const f = Array.isArray(plan.features) ? plan.features : []; return f.slice(0, 3).map((feat: string, i: number) => (<Badge key={i} variant="secondary" className="text-xs">{feat}</Badge>)); })()}
-                              {(() => { const f = Array.isArray(plan.features) ? plan.features : []; return f.length > 3 && <Badge variant="outline" className="text-xs">+{f.length - 3}</Badge>; })()}
+                              {(() => {
+                                const fm = (typeof plan.features === 'object' && plan.features !== null) ? plan.features : {};
+                                const enabledKeys = Object.keys(fm).filter(k => fm[k]);
+                                // Show up to 4 enabled features, or "No features" if none
+                                if (enabledKeys.length === 0) return <span className="text-xs text-muted-foreground italic">No features</span>;
+                                const labelMap: Record<string, string> = {};
+                                for (const g of PLAN_FEATURE_GROUPS) for (const f of g.features) labelMap[f.key] = f.label;
+                                return enabledKeys.slice(0, 4).map((k: string) => (
+                                  <Badge key={k} variant="secondary" className="text-xs">{labelMap[k] || k}</Badge>
+                                ));
+                              })()}
+                              {(() => {
+                                const fm = (typeof plan.features === 'object' && plan.features !== null) ? plan.features : {};
+                                const cnt = Object.keys(fm).filter(k => fm[k]).length;
+                                return cnt > 4 && <Badge variant="outline" className="text-xs">+{cnt - 4}</Badge>;
+                              })()}
                             </div>
                           </TableCell>
                           <TableCell><Button size="sm" variant={plan.is_active ? 'default' : 'outline'} className="h-6 text-xs px-2" onClick={() => handleTogglePlanActive(plan)}>{plan.is_active ? 'Active' : 'Inactive'}</Button></TableCell>
@@ -2791,7 +2868,32 @@ export default function AdminDashboard() {
               <div><Label>Monthly Price ($)</Label><Input type="number" min={0} step={0.01} value={planForm.price_monthly} onChange={e => setPlanForm(p => ({ ...p, price_monthly: parseFloat(e.target.value) || 0 }))} /></div>
               <div><Label>Yearly Price ($)</Label><Input type="number" min={0} step={0.01} value={planForm.price_yearly} onChange={e => setPlanForm(p => ({ ...p, price_yearly: parseFloat(e.target.value) || 0 }))} /></div>
             </div>
-            <div><Label>Features (comma-separated)</Label><Textarea value={planForm.features} onChange={e => setPlanForm(p => ({ ...p, features: e.target.value }))} placeholder="Up to 10 team members, Priority support, Custom domain" rows={2} /></div>
+            <div>
+              <Label className="mb-2 block">Plan Features</Label>
+              <div className="space-y-3 border rounded-lg p-3 max-h-64 overflow-y-auto">
+                {PLAN_FEATURE_GROUPS.map((group) => (
+                  <div key={group.group}>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">{group.label}</p>
+                    <div className="grid grid-cols-1 gap-1">
+                      {group.features.map((feat) => (
+                        <label key={feat.key} className="flex items-center gap-2 cursor-pointer py-0.5 px-1 rounded hover:bg-gray-50">
+                          <input
+                            type="checkbox"
+                            checked={!!planForm.features[feat.key]}
+                            onChange={(e) => setPlanForm(p => ({ ...p, features: { ...p.features, [feat.key]: e.target.checked } }))}
+                            className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                          />
+                          <div>
+                            <span className="text-sm font-medium">{feat.label}</span>
+                            {feat.desc && <p className="text-xs text-muted-foreground">{feat.desc}</p>}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Sort Order</Label><Input type="number" min={0} step={1} value={planForm.sort_order} onChange={e => setPlanForm(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))} /></div>
               <div className="flex items-end pb-1">

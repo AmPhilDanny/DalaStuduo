@@ -14,8 +14,10 @@ import { Badge } from '@/components/ui/badge';
 import {
   Building2, Users, Briefcase, Eye, Plus, ArrowRight,
   Mail, Search, TrendingUp, UserPlus, Sparkles, Loader2,
-  FileText, Settings, BarChart3,
+  FileText, Settings, BarChart3, CreditCard, Shield,
+  XCircle, Clock,
 } from 'lucide-react';
+import { getVerification, type OrgVerification } from '../lib/api';
 
 interface OrgStat {
   activeJobs: number;
@@ -64,12 +66,21 @@ export default function B2BDashboard() {
   });
   const [jobs, setJobs] = useState<OrgJob[]>([]);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
+  const [verification, setVerification] = useState<OrgVerification | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
     fetchDashboard();
+    if (org?.id) fetchVerification();
   }, [org?.id, user]);
+
+  const fetchVerification = async () => {
+    try {
+      const res = await getVerification();
+      setVerification(res.data);
+    } catch { /* silent */ }
+  };
 
   const fetchDashboard = async () => {
     try {
@@ -189,6 +200,51 @@ export default function B2BDashboard() {
             <Button size="sm" className="bg-purple-600 hover:bg-purple-700" onClick={() => navigate('/b2b/settings')}>
               Upgrade
               <ArrowRight className="w-3 h-3 ml-1" />
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Verification status ── */}
+      {verification && verification.status !== 'verified' && (
+        <Card className={`border ${
+          verification.status === 'pending' ? 'border-amber-200 bg-amber-50' :
+          verification.status === 'rejected' ? 'border-red-200 bg-red-50' :
+          'border-gray-200 bg-gray-50'
+        }`}>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {verification.status === 'pending' ? (
+                <Clock className="w-5 h-5 text-amber-600" />
+              ) : verification.status === 'rejected' ? (
+                <XCircle className="w-5 h-5 text-red-600" />
+              ) : (
+                <Shield className="w-5 h-5 text-gray-600" />
+              )}
+              <div>
+                <p className="text-sm font-medium text-gray-900">
+                  {verification.status === 'not_submitted' && 'Organization Not Verified'}
+                  {verification.status === 'pending' && 'Verification In Review'}
+                  {verification.status === 'rejected' && 'Verification Rejected'}
+                </p>
+                <p className="text-xs text-gray-600">
+                  {verification.status === 'not_submitted' && 'Submit your business documents for verification to unlock all features.'}
+                  {verification.status === 'pending' && 'Your documents are being reviewed. This usually takes 1-2 business days.'}
+                  {verification.status === 'rejected' && (
+                    <>Your verification was rejected. {verification.notes ? `Reason: ${verification.notes}` : 'Please resubmit with correct documents.'}</>
+                  )}
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant={verification.status === 'rejected' ? 'default' : 'outline'}
+              className={verification.status === 'rejected' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
+              onClick={() => navigate('/org/verification')}
+            >
+              {verification.status === 'not_submitted' ? 'Get Verified' :
+               verification.status === 'pending' ? 'View Status' :
+               'Resubmit'}
             </Button>
           </CardContent>
         </Card>
@@ -355,6 +411,10 @@ export default function B2BDashboard() {
               <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/b2b/settings')}>
                 <Building2 className="w-4 h-4 mr-2" />
                 Organization Settings
+              </Button>
+              <Button variant="default" className="w-full justify-start bg-purple-600 hover:bg-purple-700 text-white" onClick={() => navigate('/b2b/settings')}>
+                <CreditCard className="w-4 h-4 mr-2" />
+                {showUpgrade ? 'Upgrade Plan' : 'Manage Plan'}
               </Button>
             </CardContent>
           </Card>

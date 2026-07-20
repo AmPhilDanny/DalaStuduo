@@ -196,7 +196,8 @@ export default function OrgSetup() {
                   <p className="font-medium text-gray-900">Ready to launch!</p>
                   <p className="text-sm text-gray-500 mt-1">
                     Your organization "{form.name || 'Untitled'}" will be created with the Free plan.
-                    You can upgrade anytime.
+                    You'll need to complete <strong>business verification</strong> to unlock all features.
+                    You can upgrade your plan anytime.
                   </p>
                 </div>
               </div>
