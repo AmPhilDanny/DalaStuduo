@@ -159,6 +159,14 @@ export default function AdminDashboard() {
   const [contractSearch, setContractSearch] = useState('');
   const [contractStatusFilter, setContractStatusFilter] = useState('');
 
+  // B2B Billing Payments
+  const [billingPayments, setBillingPayments] = useState<any[]>([]);
+  const [billingPaymentsLoading, setBillingPaymentsLoading] = useState(false);
+  const [billingPaymentStatusFilter, setBillingPaymentStatusFilter] = useState('');
+  const [processingBillingPayment, setProcessingBillingPayment] = useState<string | null>(null);
+  const [billingPaymentDialog, setBillingPaymentDialog] = useState<{ payment: any; action: 'approve' | 'reject' } | null>(null);
+  const [billingPaymentNotes, setBillingPaymentNotes] = useState('');
+
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [orderStatus, setOrderStatus] = useState('');
@@ -445,11 +453,31 @@ export default function AdminDashboard() {
     }
   }, [contractStatusFilter, contractSearch]);
 
+  const fetchBillingPayments = useCallback(async () => {
+    setBillingPaymentsLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (billingPaymentStatusFilter) params.status = billingPaymentStatusFilter;
+      const result = await get<any[]>('/admin/billing/payments', params);
+      setBillingPayments(result.data || []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load billing payments');
+    } finally {
+      setBillingPaymentsLoading(false);
+    }
+  }, [billingPaymentStatusFilter]);
+
   useEffect(() => {
     if (user && isAdminAccess) {
       fetchContracts();
     }
   }, [user, isAdminAccess, fetchContracts]);
+
+  useEffect(() => {
+    if (user && isAdminAccess) {
+      fetchBillingPayments();
+    }
+  }, [user, isAdminAccess, fetchBillingPayments]);
 
   // Debounced search
   const [contractSearchInput, setContractSearchInput] = useState('');
@@ -710,6 +738,40 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleApproveBillingPayment = async () => {
+    if (!billingPaymentDialog) return;
+    const { payment } = billingPaymentDialog;
+    setProcessingBillingPayment(payment.id);
+    try {
+      await patch(`/admin/billing/payments/${payment.id}/approve`, { admin_notes: billingPaymentNotes || undefined });
+      toast.success('Payment approved — plan activated');
+      setBillingPaymentDialog(null);
+      setBillingPaymentNotes('');
+      fetchBillingPayments();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to approve');
+    } finally {
+      setProcessingBillingPayment(null);
+    }
+  };
+
+  const handleRejectBillingPayment = async () => {
+    if (!billingPaymentDialog) return;
+    const { payment } = billingPaymentDialog;
+    setProcessingBillingPayment(payment.id);
+    try {
+      await patch(`/admin/billing/payments/${payment.id}/reject`, { admin_notes: billingPaymentNotes || undefined });
+      toast.success('Payment rejected');
+      setBillingPaymentDialog(null);
+      setBillingPaymentNotes('');
+      fetchBillingPayments();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reject');
+    } finally {
+      setProcessingBillingPayment(null);
+    }
+  };
+
   const resolveDispute = async (orderId: string, action: 'refund' | 'release') => {
     setResolvingDispute(orderId);
     try {
@@ -849,6 +911,7 @@ export default function AdminDashboard() {
     { value: 'verifications', label: 'Verifications', icon: <Shield className="w-4 h-4" /> },
     { value: 'plans', label: 'Subscription Plans', icon: <CreditCard className="w-4 h-4" /> },
     { value: 'contracts', label: 'Contracts', icon: <FileText className="w-4 h-4" /> },
+    { value: 'billing-payments', label: 'Billing Payments', icon: <Banknote className="w-4 h-4" /> },
   ];
 
   return (
@@ -1766,6 +1829,146 @@ export default function AdminDashboard() {
                       ))}
                     </TableBody>
                   </Table>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ═══ BILLING PAYMENTS ═══ */}
+          {activeTab === 'billing-payments' && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Banknote className="w-5 h-5 text-secondary" />
+                    B2B Billing Payments
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    {['', 'pending', 'approved', 'rejected'].map(s => (
+                      <Button key={s} size="sm" variant={billingPaymentStatusFilter === s ? 'default' : 'outline'}
+                        onClick={() => setBillingPaymentStatusFilter(s)}>
+                        {s || 'All'}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {billingPaymentsLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-purple-600" /></div>
+                ) : billingPayments.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <Banknote className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">No Billing Payments</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">No billing payments match the current filter.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Organization</TableHead>
+                        <TableHead>Plan</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Method</TableHead>
+                        <TableHead>Proof</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {billingPayments.map((p: any) => (
+                        <TableRow key={p.id}>
+                          <TableCell className="font-medium text-sm">{p.org?.name || p.org_id?.slice(0, 8)}</TableCell>
+                          <TableCell className="text-sm">{p.plan?.name || p.plan_id?.slice(0, 8)}</TableCell>
+                          <TableCell className="text-sm font-medium">₦{Number(p.amount).toLocaleString()}</TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className="text-xs capitalize">{p.payment_method}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {p.proof_url ? (
+                              <a href={p.proof_url} target="_blank" rel="noopener noreferrer" className="text-xs text-purple-600 hover:underline inline-flex items-center gap-1">
+                                <FileText className="w-3 h-3" /> View
+                              </a>
+                            ) : <span className="text-xs text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className={`text-xs ${
+                              p.status === 'approved' ? 'bg-green-100 text-green-800 border-green-200' :
+                              p.status === 'rejected' ? 'bg-red-100 text-red-800 border-red-200' :
+                              'bg-yellow-100 text-yellow-800 border-yellow-200'
+                            }`}>
+                              {p.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {new Date(p.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {p.status === 'pending' && (
+                              <div className="flex justify-end gap-1">
+                                <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-700"
+                                  onClick={() => { setBillingPaymentDialog({ payment: p, action: 'approve' }); setBillingPaymentNotes(''); }}>
+                                  <CheckCircle2 className="w-3 h-3 mr-0.5" /> Approve
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 text-xs text-red-600"
+                                  onClick={() => { setBillingPaymentDialog({ payment: p, action: 'reject' }); setBillingPaymentNotes(''); }}>
+                                  <XCircle className="w-3 h-3 mr-0.5" /> Reject
+                                </Button>
+                              </div>
+                            )}
+                            {p.status === 'approved' && (
+                              <span className="text-xs text-green-600">Approved {p.reviewed_at ? new Date(p.reviewed_at).toLocaleDateString() : ''}</span>
+                            )}
+                            {p.status === 'rejected' && (
+                              <span className="text-xs text-red-600">Rejected {p.reviewed_at ? new Date(p.reviewed_at).toLocaleDateString() : ''}</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                {billingPaymentDialog && (
+                  <Dialog open={!!billingPaymentDialog} onOpenChange={() => setBillingPaymentDialog(null)}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          {billingPaymentDialog.action === 'approve' ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
+                          {billingPaymentDialog.action === 'approve' ? 'Approve Payment' : 'Reject Payment'}
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-3 pt-2">
+                        <div className="text-sm space-y-1">
+                          <p><span className="text-muted-foreground">Org:</span> {billingPaymentDialog.payment.org?.name || billingPaymentDialog.payment.org_id?.slice(0, 8)}</p>
+                          <p><span className="text-muted-foreground">Plan:</span> {billingPaymentDialog.payment.plan?.name || billingPaymentDialog.payment.plan_id?.slice(0, 8)}</p>
+                          <p><span className="text-muted-foreground">Amount:</span> ₦{Number(billingPaymentDialog.payment.amount).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <Label>Admin Notes</Label>
+                          <Textarea
+                            value={billingPaymentNotes}
+                            onChange={(e) => setBillingPaymentNotes(e.target.value)}
+                            placeholder="Optional notes..."
+                            rows={3}
+                          />
+                        </div>
+                        <DialogFooter className="gap-2 pt-2">
+                          <Button variant="outline" onClick={() => setBillingPaymentDialog(null)} disabled={!!processingBillingPayment}>
+                            Cancel
+                          </Button>
+                          <Button
+                            className={billingPaymentDialog.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
+                            onClick={billingPaymentDialog.action === 'approve' ? handleApproveBillingPayment : handleRejectBillingPayment}
+                            disabled={!!processingBillingPayment}
+                          >
+                            {processingBillingPayment ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                            {billingPaymentDialog.action === 'approve' ? 'Approve & Activate Plan' : 'Reject Payment'}
+                          </Button>
+                        </DialogFooter>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 )}
               </CardContent>
             </Card>
