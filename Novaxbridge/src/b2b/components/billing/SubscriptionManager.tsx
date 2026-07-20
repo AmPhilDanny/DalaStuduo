@@ -49,11 +49,18 @@ export default function SubscriptionManager() {
 
   const canChange = role === 'owner' || role === 'admin';
 
+  // Normalize plan.features from either string[] or Record<string, boolean> to string[]
+  const planFeaturesList = (p: SubscriptionPlan): string[] => {
+    if (Array.isArray(p.features)) return p.features;
+    if (p.features && typeof p.features === 'object') return Object.keys(p.features);
+    return [];
+  };
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-purple-600" /></div>;
   }
 
-  const allFeatures = Array.from(new Set(plans.flatMap(p => p.features || [])));
+  const allFeatures = Array.from(new Set(plans.flatMap(p => planFeaturesList(p))));
 
   return (
     <div className="space-y-6">
@@ -97,7 +104,7 @@ export default function SubscriptionManager() {
                   <CardContent className="flex-1 flex flex-col">
                     {plan.description && <p className="text-xs text-gray-500 mb-4">{plan.description}</p>}
                     <ul className="space-y-2 flex-1">
-                      {(plan.features || []).map((f, i) => (
+                      {planFeaturesList(plan).map((f, i) => (
                         <li key={i} className="flex items-center gap-2 text-sm text-gray-700">
                           <CheckFeature ok={true} />
                           {f}

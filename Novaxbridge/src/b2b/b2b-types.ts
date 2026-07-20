@@ -101,7 +101,7 @@ export interface SubscriptionPlan {
   price_yearly: number;
   max_members: number;
   max_active_jobs: number;
-  features: Record<string, boolean>;
+  features: string[];
   is_active: boolean;
   sort_order: number;
 }
