@@ -11,6 +11,7 @@ import {
   getBillingPlans, getBillingInvoices, getBillingHistory, changeSubscriptionPlan,
   type SubscriptionPlan, type BillingInvoice, type BillingHistoryEntry,
 } from '../../lib/api';
+import PaymentDialog from './PaymentDialog';
 
 function CheckFeature({ ok }: { ok: boolean }) {
   return ok
@@ -26,6 +27,8 @@ export default function SubscriptionManager() {
   const [history, setHistory] = useState<BillingHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [changingPlan, setChangingPlan] = useState(false);
+  const [paymentPlan, setPaymentPlan] = useState<SubscriptionPlan | null>(null);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
   const fetch = useCallback(async () => {
     try {
@@ -115,18 +118,9 @@ export default function SubscriptionManager() {
                       className="mt-6 w-full"
                       variant={isCurrent ? 'outline' : isFree ? 'outline' : 'default'}
                       disabled={isCurrent || !canChange}
-                      onClick={async () => {
+                      onClick={() => {
                         if (isFree || isCurrent) return;
-                        setChangingPlan(true);
-                        try {
-                          await changeSubscriptionPlan(plan.slug, 'monthly');
-                          toast.success(`Switched to ${plan.name}`);
-                          fetch();
-                        } catch (err) {
-                          toast.error(err instanceof Error ? err.message : 'Failed to switch plan');
-                        } finally {
-                          setChangingPlan(false);
-                        }
+                        setPaymentPlan(plan);
                       }}
                     >
                       {changingPlan ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
@@ -199,6 +193,16 @@ export default function SubscriptionManager() {
           )}
         </TabsContent>
       </Tabs>
+
+      {paymentPlan && (
+        <PaymentDialog
+          open={!!paymentPlan}
+          onOpenChange={(v) => { if (!v) setPaymentPlan(null); }}
+          plan={paymentPlan}
+          billingCycle={billingCycle}
+          onSuccess={() => { setPaymentPlan(null); fetch(); }}
+        />
+      )}
     </div>
   );
 }
