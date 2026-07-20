@@ -236,12 +236,6 @@ export function Navbar() {
                       <span>Messages</span>
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/dashboard" className="cursor-pointer flex items-center gap-2">
-                      <LayoutDashboard className="w-4 h-4" />
-                      <span>Dashboard</span>
-                    </Link>
-                  </DropdownMenuItem>
                   {profile?.role === 'firm' && (
                     <DropdownMenuItem asChild>
                       <Link to="/jobs/new" className="cursor-pointer flex items-center gap-2">
@@ -381,9 +375,6 @@ export function Navbar() {
                 </Link>
                 <Link to="/messages" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
                   <MessageSquare className="w-4 h-4" /> Messages
-                </Link>
-                <Link to="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
-                  <LayoutDashboard className="w-4 h-4" /> Dashboard
                 </Link>
                 {profile?.role === 'firm' && (
                   <Link to="/jobs/new" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">

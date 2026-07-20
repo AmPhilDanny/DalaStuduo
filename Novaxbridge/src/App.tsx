@@ -43,6 +43,7 @@ import PipelineView from "@/b2b/components/hiring/PipelineView";
 import ContractList from "@/b2b/components/contracts/ContractList";
 import ComplianceDashboard from "@/b2b/components/compliance/ComplianceDashboard";
 import AnalyticsDashboard from "@/b2b/components/analytics/AnalyticsDashboard";
+import B2BDashboard from "@/b2b/pages/B2BDashboard";
 import SettingsPage from "@/b2b/components/settings/SettingsPage";
 import { OrgProvider } from "@/b2b/hooks/useOrg";
 
@@ -126,7 +127,6 @@ function App() {
               <Route path="/admin" element={<AdminRedirect />} />
               <Route path="/b2b/setup" element={<OrgSetup />} />
               <Route path="/b2b/invite/accept" element={<InviteAccept />} />
-              <Route path="/b2b/dashboard" element={<Navigate to="/dashboard" replace />} />
               <Route path="/b2b" element={
                 <OrgProvider>
                   <OrgSubnav />
@@ -137,7 +137,7 @@ function App() {
                   </div>
                 </OrgProvider>
               }>
-                <Route index element={<Navigate to="/dashboard" replace />} />
+                <Route index element={<B2BDashboard />} />
                 <Route path="team" element={<TeamList />} />
                 <Route path="talent" element={<TalentSearch />} />
                 <Route path="talent/lists" element={<TalentListManager />} />
