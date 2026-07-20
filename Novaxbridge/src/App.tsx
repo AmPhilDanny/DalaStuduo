@@ -125,7 +125,7 @@ function App() {
               <Route path="/disputes" element={<Disputes />} />
               <Route path="/disputes/:id" element={<DisputeDetail />} />
               <Route path="/admin" element={<AdminRedirect />} />
-              <Route path="/b2b/setup" element={<OrgSetup />} />
+              <Route path="/b2b/setup" element={<OrgProvider><OrgSetup /></OrgProvider>} />
               <Route path="/b2b/invite/accept" element={<InviteAccept />} />
               <Route path="/b2b" element={
                 <OrgProvider>

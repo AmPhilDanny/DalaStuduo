@@ -828,12 +828,14 @@ export default function Profile() {
         </Dialog>
 
         {/* Video call dialog */}
-        <CustomVideoCall
-          open={videoCallOpen}
-          onOpenChange={setVideoCallOpen}
-          roomName={`dala-profile-${user?.id}-${targetId}`}
-          userName={user?.user_metadata?.full_name || user?.email || 'User'}
-        />
+        {videoCallOpen && (
+          <CustomVideoCall
+            open={videoCallOpen}
+            onOpenChange={setVideoCallOpen}
+            roomName={`dala-profile-${user?.id}-${targetId}`}
+            userName={user?.user_metadata?.full_name || user?.email || 'User'}
+          />
+        )}
 
         {/* Disconnect confirmation dialog */}
         <Dialog open={disconnectDialogOpen} onOpenChange={setDisconnectDialogOpen}>

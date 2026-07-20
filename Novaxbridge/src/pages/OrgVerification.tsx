@@ -192,7 +192,7 @@ export default function OrgVerification() {
                 <p className="text-muted-foreground mb-6">
                   Your organization <strong>{org.name}</strong> has been verified successfully.
                 </p>
-                <Button onClick={() => navigate('/b2b/dashboard')}>
+                <Button onClick={() => navigate('/b2b')}>
                   Go to Dashboard
                 </Button>
               </CardContent>
@@ -341,7 +341,7 @@ export default function OrgVerification() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate('/b2b/dashboard')}
+                  onClick={() => navigate('/b2b')}
                 >
                   Cancel
                 </Button>
