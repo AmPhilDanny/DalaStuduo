@@ -974,11 +974,31 @@ adminRouter.patch('/verifications/:id/review',
 
     if (error) throw new AppError(500, error.message);
 
-    // If verified, also update the org status
     if (status === 'verified') {
+      const { data: org } = await adminClient
+        .from('organizations')
+        .select('subscription_plan_id')
+        .eq('id', existing.org_id)
+        .single();
+
+      const updates: Record<string, unknown> = { status: 'active' };
+
+      if (!org?.subscription_plan_id) {
+        const { data: freePlan } = await adminClient
+          .from('subscription_plans')
+          .select('id')
+          .eq('slug', 'free')
+          .maybeSingle();
+
+        if (freePlan) {
+          updates.subscription_plan_id = freePlan.id;
+          updates.subscription_starts_at = new Date().toISOString();
+        }
+      }
+
       await adminClient
         .from('organizations')
-        .update({ status: 'active' })
+        .update(updates)
         .eq('id', existing.org_id);
     }
 
