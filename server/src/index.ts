@@ -22,6 +22,8 @@ import { webhooksRouter } from './routes/webhooks/index.js';
 import { emailRouter } from './routes/email/index.js';
 import { githubRouter } from './routes/github/index.js';
 import { academyRouter } from './routes/academy/index.js';
+import { academyCoursesRouter } from './routes/academy/courses.js';
+import { academyCertificatesRouter } from './routes/academy/certificates.js';
 import { setupVideoCallSignaling, videoCallRouter } from './routes/video-call/index.js';
 
 const logger = pino({ name: 'skillbridge-server' });
@@ -118,6 +120,8 @@ app.use('/api/notifications', requireAuth, notificationsRouter);
 app.use('/api/email', requireAuth, emailRouter);
 app.use('/api/github', requireAuth, githubRouter);
 app.use('/api/academy', requireAuth, academyRouter);
+app.use('/api/academy', requireAuth, academyCoursesRouter);
+app.use('/api/academy', requireAuth, academyCertificatesRouter);
 
 // ── Admin Routes (auth + admin role) ──
 app.use('/api/admin', requireAuth, adminRouter);
