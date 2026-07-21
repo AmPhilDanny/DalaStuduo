@@ -12,7 +12,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/useAuth';
-import { usePermissions } from '@/hooks/usePermissions';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { getUnreadCount, getNotifications, markNotificationRead, markAllNotificationsRead, Notification } from '@/lib/marketplace';
 import { toast } from 'sonner';
@@ -21,7 +20,6 @@ export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, profile, signOut } = useAuth();
-  const { hasPermission, loading: permLoading } = usePermissions();
   const { config, isValidating: siteLoading } = useSiteSettings();
   const navigate = useNavigate();
   const location = useLocation();
@@ -244,7 +242,7 @@ export function Navbar() {
                       <span>Messages</span>
                     </Link>
                   </DropdownMenuItem>
-                  {!permLoading && hasPermission('access_b2b') && (
+                  {profile?.role === 'firm' && (
                     <DropdownMenuItem asChild>
                       <Link to="/jobs/new" className="cursor-pointer flex items-center gap-2">
                         <Rocket className="w-4 h-4" />
@@ -252,7 +250,7 @@ export function Navbar() {
                       </Link>
                     </DropdownMenuItem>
                   )}
-                  {!permLoading && hasPermission('access_b2b') && (
+                  {profile?.role === 'firm' && (
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuLabel className="text-xs text-muted-foreground uppercase tracking-wider">My Organization</DropdownMenuLabel>
@@ -391,7 +389,7 @@ export function Navbar() {
                 <Link to="/messages" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
                   <MessageSquare className="w-4 h-4" /> Messages
                 </Link>
-                {!permLoading && hasPermission('access_b2b') && (
+                {profile?.role === 'firm' && (
                   <Link to="/jobs/new" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
                     <Rocket className="w-4 h-4" /> Post Job
                   </Link>
@@ -400,7 +398,7 @@ export function Navbar() {
 
               <div className="my-2 border-t border-border/50"></div>
 
-              {!permLoading && hasPermission('access_b2b') && (
+              {profile?.role === 'firm' && (
                 <>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 pb-1">Organization</p>
                   <div className="flex flex-col gap-1">
