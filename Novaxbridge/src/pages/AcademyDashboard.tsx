@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, BookOpen, GraduationCap, Users, MessageSquare, Plus, TrendingUp, Clock, ArrowRight } from 'lucide-react';
+import { Loader2, BookOpen, GraduationCap, Users, MessageSquare, Plus, TrendingUp, Clock, ArrowRight, Rocket } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Course {
@@ -102,6 +102,24 @@ export default function AcademyDashboard() {
         <h1 className="text-2xl font-bold tracking-tight">Academy</h1>
         <p className="text-muted-foreground mt-1">Learn new skills, teach others, and grow with our course platform.</p>
       </div>
+
+      {/* Visitor prompt */}
+      {!user && (
+        <Card className="bg-gradient-to-r from-secondary/5 to-primary/5 border-secondary/20">
+          <CardContent className="p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6">
+            <div className="w-14 h-14 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
+              <Rocket className="w-7 h-7 text-secondary" />
+            </div>
+            <div className="flex-1 text-center sm:text-left">
+              <h2 className="text-lg font-semibold mb-1">Welcome to the Academy</h2>
+              <p className="text-sm text-muted-foreground">Browse courses, track your progress, get AI-powered tutoring, and earn certificates. Sign in to get started.</p>
+            </div>
+            <Button onClick={() => navigate('/auth')} size="lg" className="shrink-0">
+              Sign In to Get Started
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
