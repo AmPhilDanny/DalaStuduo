@@ -2017,6 +2017,7 @@ export default function AdminDashboard() {
 
           {/* ═══ ACADEMY ═══ */}
           {activeTab === 'academy' && (
+            <>
             <Card>
               <CardHeader><CardTitle className="flex items-center gap-2"><GraduationCap className="w-5 h-5 text-secondary" /> Academy Settings</CardTitle></CardHeader>
               <CardContent>
@@ -2098,7 +2099,6 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
 
-            {/* Tutor Applications Management */}
             <Card className="mt-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-secondary" /> Tutor Applications</CardTitle>
@@ -2106,11 +2106,11 @@ export default function AdminDashboard() {
               <CardContent>
                 {loadingApplications ? (
                   <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-secondary" /></div>
-                ) : applications.length === 0 ? (
+                ) : academyApplications.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No pending tutor applications.</p>
                 ) : (
                   <div className="space-y-4">
-                    {applications.map((app) => (
+                    {academyApplications.map((app) => (
                       <div key={app.id} className="border rounded-lg p-4 space-y-3">
                         <div className="flex items-start justify-between">
                           <div>
@@ -2155,6 +2155,7 @@ export default function AdminDashboard() {
                 )}
               </CardContent>
             </Card>
+            </>
           )}
 
           {/* ═══ MANUAL PAYMENTS ═══ */}
