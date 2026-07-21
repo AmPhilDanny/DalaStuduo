@@ -42,7 +42,7 @@ import {
 import { Loader2, Shield, Search, CheckCircle2, XCircle, Eye, Key, Save, 
 RefreshCw, CreditCard, DollarSign, Scale, MessageSquare, Download, Settings, LayoutGrid, ShoppingCart, Users, Wallet, 
 Building2, Banknote, Image as ImageIcon, ChevronLeft, ChevronRight, Bell, LogOut, LayoutDashboard, Edit, Trash2, 
-ExternalLink, Calendar, FileText, Briefcase, Plus, Video } from 'lucide-react';
+ExternalLink, Calendar, FileText, Briefcase, Plus, Video, GraduationCap } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { getPayouts, Payout, getAdminManualPayments, approveManualPayment, rejectManualPayment, ManualPayment } from '@/lib/marketplace';
@@ -157,6 +157,19 @@ export default function AdminDashboard() {
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string }>>({});
   const [savingKeys, setSavingKeys] = useState(false);
   const [loadingKeys, setLoadingKeys] = useState(false);
+
+  // Academy config
+  const [academyConfig, setAcademyConfig] = useState({
+    tutor_applications_enabled: true,
+    academy_enabled: true,
+    auto_approve_tutors: false,
+    min_course_price: 0,
+    platform_fee_percent: 5,
+  });
+  const [savingAcademy, setSavingAcademy] = useState(false);
+  const [applications, setApplications] = useState<any[]>([]);
+  const [loadingApplications, setLoadingApplications] = useState(false);
+  const [processingApp, setProcessingApp] = useState<string | null>(null);
 
   // Payment Gateway config
   const [paymentGateways, setPaymentGateways] = useState<Record<string, { public_key: string; secret_key: string; enabled: boolean }>>({});
@@ -397,6 +410,8 @@ export default function AdminDashboard() {
       setUsers(usrRes.data || []);
       setPayouts(ptRes);
       loadAiKeys();
+      loadAcademyConfig();
+      loadApplications();
       loadPaymentConfig();
       loadServiceFee();
       loadDisputes();
@@ -622,6 +637,76 @@ export default function AdminDashboard() {
     } finally {
       setSavingListingTTL(false);
     }
+  };
+
+  const loadAcademyConfig = async () => {
+    try {
+      const { data } = await supabase
+        .from('site_settings')
+        .select('value')
+        .eq('key', 'academy_config')
+        .maybeSingle();
+      if (data?.value && typeof data.value === 'object') {
+        setAcademyConfig((prev) => ({ ...prev, ...(data.value as Partial<typeof prev>) }));
+      }
+    } catch { /* ignore */ }
+  };
+
+  const saveAcademyConfig = async () => {
+    setSavingAcademy(true);
+    try {
+      const { data: existing } = await supabase
+        .from('site_settings')
+        .select('id')
+        .eq('key', 'academy_config')
+        .maybeSingle();
+      if (existing) {
+        await supabase.from('site_settings').update({ value: academyConfig }).eq('key', 'academy_config');
+      } else {
+        await supabase.from('site_settings').insert({ key: 'academy_config', value: academyConfig });
+      }
+      toast.success('Academy settings saved');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save academy settings');
+    } finally {
+      setSavingAcademy(false);
+    }
+  };
+
+  const loadApplications = async () => {
+    setLoadingApplications(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4001/api'}/academy/applications`, { credentials: 'include' });
+      const json = await res.json();
+      if (json.applications) setApplications(json.applications);
+    } catch { /* ignore */ }
+    finally { setLoadingApplications(false); }
+  };
+
+  const handleApproveApplication = async (id: string) => {
+    setProcessingApp(id);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4001/api'}/academy/applications/${id}/approve`, { method: 'POST', credentials: 'include' });
+      const json = await res.json();
+      if (json.success) {
+        setApplications((prev) => prev.map((a) => a.id === id ? { ...a, status: 'approved' } : a));
+        toast.success('Tutor application approved');
+      } else toast.error(json.error || 'Failed to approve');
+    } catch { toast.error('Network error'); }
+    finally { setProcessingApp(null); }
+  };
+
+  const handleRejectApplication = async (id: string) => {
+    setProcessingApp(id);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4001/api'}/academy/applications/${id}/reject`, { method: 'POST', credentials: 'include' });
+      const json = await res.json();
+      if (json.success) {
+        setApplications((prev) => prev.map((a) => a.id === id ? { ...a, status: 'rejected' } : a));
+        toast.success('Tutor application rejected');
+      } else toast.error(json.error || 'Failed to reject');
+    } catch { toast.error('Network error'); }
+    finally { setProcessingApp(null); }
   };
 
   const runExpiryCheck = async () => {
@@ -1264,6 +1349,7 @@ export default function AdminDashboard() {
     { value: 'service-fee', label: 'Fees', icon: <DollarSign className="w-4 h-4" /> },
     { value: 'disputes', label: 'Disputes', icon: <Scale className="w-4 h-4" /> },
     { value: 'ai-settings', label: 'AI Settings', icon: <Key className="w-4 h-4" /> },
+    { value: 'academy', label: 'Academy', icon: <GraduationCap className="w-4 h-4" /> },
     { value: 'manual-payments', label: 'Manual Payments', icon: <Banknote className="w-4 h-4" /> },
     { value: 'site-settings', label: 'Site Settings', icon: <Settings className="w-4 h-4" /> },
     { value: 'video-calls', label: 'Video Calls', icon: <Video className="w-4 h-4" /> },
@@ -1923,6 +2009,148 @@ export default function AdminDashboard() {
                         {loadingKeys ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                       </Button>
                     </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ═══ ACADEMY ═══ */}
+          {activeTab === 'academy' && (
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><GraduationCap className="w-5 h-5 text-secondary" /> Academy Settings</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-6 max-w-xl">
+
+                  {/* Master toggle */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <Label className="text-sm font-semibold">Academy Enabled</Label>
+                      <p className="text-xs text-muted-foreground">Master switch for the entire Skill Academy section</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="toggle toggle-primary"
+                      checked={academyConfig.academy_enabled}
+                      onChange={(e) => setAcademyConfig((prev) => ({ ...prev, academy_enabled: e.target.checked }))}
+                    />
+                  </div>
+
+                  {/* Tutor applications toggle */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <Label className="text-sm font-semibold">Tutor Applications Open</Label>
+                      <p className="text-xs text-muted-foreground">Allow users to apply as tutors</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="toggle toggle-primary"
+                      checked={academyConfig.tutor_applications_enabled}
+                      onChange={(e) => setAcademyConfig((prev) => ({ ...prev, tutor_applications_enabled: e.target.checked }))}
+                    />
+                  </div>
+
+                  {/* Auto-approve tutors */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <Label className="text-sm font-semibold">Auto-Approve Tutors</Label>
+                      <p className="text-xs text-muted-foreground">Skip manual review — approve tutor applications automatically</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="toggle toggle-primary"
+                      checked={academyConfig.auto_approve_tutors}
+                      onChange={(e) => setAcademyConfig((prev) => ({ ...prev, auto_approve_tutors: e.target.checked }))}
+                    />
+                  </div>
+
+                  {/* Min course price */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Minimum Course Price</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={academyConfig.min_course_price}
+                      onChange={(e) => setAcademyConfig((prev) => ({ ...prev, min_course_price: Number(e.target.value) }))}
+                    />
+                    <p className="text-xs text-muted-foreground">Minimum price tutors must set for their courses</p>
+                  </div>
+
+                  {/* Platform fee */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Platform Fee (%)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={academyConfig.platform_fee_percent}
+                      onChange={(e) => setAcademyConfig((prev) => ({ ...prev, platform_fee_percent: Number(e.target.value) }))}
+                    />
+                    <p className="text-xs text-muted-foreground">Platform commission percentage on course sales</p>
+                  </div>
+
+                  {/* Save button */}
+                  <Button onClick={saveAcademyConfig} disabled={savingAcademy} className="gap-1.5">
+                    {savingAcademy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    {savingAcademy ? 'Saving...' : 'Save Academy Settings'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tutor Applications Management */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-secondary" /> Tutor Applications</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingApplications ? (
+                  <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-secondary" /></div>
+                ) : applications.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No pending tutor applications.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {applications.map((app) => (
+                      <div key={app.id} className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium">{app.profile?.full_name || 'Unknown'}</p>
+                            <p className="text-xs text-muted-foreground">{app.profile?.email}</p>
+                          </div>
+                          <Badge className={app.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : app.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
+                            {app.status}
+                          </Badge>
+                        </div>
+                        <p className="text-sm font-medium">{app.headline}</p>
+                        <p className="text-sm text-muted-foreground line-clamp-2">{app.bio}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {(app.subjects || []).map((s: string) => (
+                            <Badge key={s} variant="secondary" className="text-[10px]">{s}</Badge>
+                          ))}
+                        </div>
+                        {app.credentials && (
+                          <p className="text-xs text-muted-foreground"><strong>Credentials:</strong> {app.credentials}</p>
+                        )}
+                        {app.sample_lesson_url && (
+                          <a href={app.sample_lesson_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">Sample Lesson →</a>
+                        )}
+                        {app.status === 'pending' && (
+                          <div className="flex gap-2 pt-2">
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700 gap-1" onClick={() => handleApproveApplication(app.id)} disabled={processingApp === app.id}>
+                              {processingApp === app.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                              Approve
+                            </Button>
+                            <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 gap-1" onClick={() => handleRejectApplication(app.id)} disabled={processingApp === app.id}>
+                              {processingApp === app.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+                              Reject
+                            </Button>
+                          </div>
+                        )}
+                        {app.reviewer_notes && (
+                          <p className="text-xs text-muted-foreground italic">Notes: {app.reviewer_notes}</p>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>
