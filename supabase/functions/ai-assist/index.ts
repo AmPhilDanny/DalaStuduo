@@ -40,33 +40,17 @@ interface ProviderConfig {
 const ACTIVE_PROVIDER = (Deno.env.get("AI_PROVIDER") || "openrouter") as AiProvider;
 
 // ── Helper: read API keys from site_settings DB (admin-set via dashboard) ──
-const SETTINGS_KEY_MAP: Record<AiProvider, string> = {
-  openrouter: "ai_openrouter_key",
-  mistral: "ai_mistral_key",
-  openai: "ai_openai_key",
-  groq: "ai_groq_key",
-  google: "ai_google_key",
-  togetherai: "ai_togetherai_key",
-};
-
+// The admin dashboard stores all keys in a single row with key='ai_api_keys'
+// and value = { openrouter: "sk-...", openai: "sk-...", ... }
 async function loadDbApiKeys(): Promise<Partial<Record<AiProvider, string>>> {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!serviceRoleKey) return {};
 
   try {
     const svc = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
-    const keys = Object.values(SETTINGS_KEY_MAP);
-    const { data } = await svc.from("site_settings").select("key, value").in("key", keys);
-    if (!data) return {};
-
-    const result: Partial<Record<AiProvider, string>> = {};
-    for (const entry of data) {
-      const provider = (Object.entries(SETTINGS_KEY_MAP).find(([, v]) => v === entry.key)?.[0]) as AiProvider | undefined;
-      if (provider && entry.value?.api_key) {
-        result[provider] = String(entry.value.api_key);
-      }
-    }
-    return result;
+    const { data } = await svc.from("site_settings").select("value").eq("key", "ai_api_keys").maybeSingle();
+    if (!data?.value || typeof data.value !== "object") return {};
+    return data.value as Partial<Record<AiProvider, string>>;
   } catch {
     return {};
   }
@@ -78,7 +62,7 @@ const PROVIDERS: Record<AiProvider, ProviderConfig> = {
   openrouter: {
     baseUrl: "https://openrouter.ai/api/v1",
     apiKey: DB_API_KEYS.openrouter || Deno.env.get("OPENROUTER_API_KEY") || "",
-    defaultModel: Deno.env.get("OPENROUTER_MODEL") || "openai/gpt-4o-mini",
+    defaultModel: Deno.env.get("OPENROUTER_MODEL") || "google/gemini-2.0-flash-001",
     label: "OpenRouter",
   },
   mistral: {
