@@ -133,6 +133,7 @@ function App() {
                 <Route path="apply" element={<TutorApply />} />
                 <Route path="ai-tutor" element={<Tutor compact basePath="/academy/ai-tutor" />} />
                 <Route path="ai-tutor/:id" element={<TutorChat />} />
+                <Route path="my-courses" element={<MyCourses />} />
                 <Route path="learn/:courseId" element={<CourseLearn />} />
                 <Route path=":slug" element={<CourseDetail />} />
               </Route>
@@ -141,7 +142,7 @@ function App() {
               <Route path="/tutor" element={<Tutor />} />
               <Route path="/tutor/:id" element={<TutorChat />} />
 
-              <Route path="/my-courses" element={<MyCourses />} />
+              <Route path="/my-courses" element={<Navigate to="/academy/my-courses" replace />} />
               <Route path="/tutor-dashboard" element={<MyTutorProfile />} />
               <Route path="/dashboard" element={<UserDashboard />} />
               <Route path="/dashboard/org" element={<Navigate to="/dashboard" replace />} />

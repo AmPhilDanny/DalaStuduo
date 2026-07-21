@@ -172,7 +172,7 @@ export function Navbar() {
                         Browse Courses
                       </Link>
                       <Link
-                        to="/my-courses"
+                        to="/academy/my-courses"
                         onClick={() => setAcademyOpen(false)}
                         className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground hover:bg-muted/50 transition-colors"
                       >
@@ -314,9 +314,9 @@ export function Navbar() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link to="/my-courses" className="cursor-pointer flex items-center gap-2">
+                    <Link to="/academy" className="cursor-pointer flex items-center gap-2">
                       <GraduationCap className="w-4 h-4" />
-                      <span>My Courses</span>
+                      <span>Academy</span>
                     </Link>
                   </DropdownMenuItem>
                   {profile?.role && ['tutor', 'admin', 'super_admin'].includes(profile.role) && (
@@ -467,7 +467,7 @@ export function Navbar() {
                         <Link to="/academy/browse" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
                           <BookOpen className="w-3.5 h-3.5" /> Browse Courses
                         </Link>
-                        <Link to="/my-courses" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                        <Link to="/academy/my-courses" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
                           <GraduationCap className="w-3.5 h-3.5" /> My Courses
                         </Link>
                         <Link to="/academy/ai-tutor" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
@@ -527,8 +527,8 @@ export function Navbar() {
                 <Link to="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
                   <LayoutDashboard className="w-4 h-4" /> Dashboard
                 </Link>
-                <Link to="/my-courses" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
-                  <GraduationCap className="w-4 h-4" /> My Courses
+                <Link to="/academy" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                  <GraduationCap className="w-4 h-4" /> Academy
                 </Link>
                 {profile?.role && ['tutor', 'admin', 'super_admin'].includes(profile.role) && (
                   <Link to="/tutor-dashboard" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">

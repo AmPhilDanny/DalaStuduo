@@ -5,7 +5,7 @@ import { GraduationCap, BookOpen, LayoutDashboard, MessageSquare, Users, Plus, B
 const academyNavItems = [
   { to: '/academy', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/academy/browse', label: 'Browse Courses', icon: BookOpen },
-  { to: '/my-courses', label: 'My Courses', icon: GraduationCap },
+  { to: '/academy/my-courses', label: 'My Courses', icon: GraduationCap },
   { to: '/academy/ai-tutor', label: 'AI Tutor', icon: MessageSquare },
   { to: '/tutor-dashboard', label: 'Tutor Dashboard', icon: BookOpenCheck },
   { to: '/academy/apply', label: 'Become a Tutor', icon: Users },
@@ -15,7 +15,6 @@ const academyNavItems = [
 export default function AcademySubnav() {
   const { profile } = useAuth();
   const isTutorOrAdmin = profile?.role && ['tutor', 'admin', 'super_admin'].includes(profile.role);
-  const isAdmin = profile?.role && ['admin', 'super_admin'].includes(profile.role);
 
   return (
     <div className="sticky top-16 z-30 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
