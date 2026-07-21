@@ -167,7 +167,7 @@ export default function AdminDashboard() {
     platform_fee_percent: 5,
   });
   const [savingAcademy, setSavingAcademy] = useState(false);
-  const [applications, setApplications] = useState<any[]>([]);
+  const [academyApplications, setAcademyApplications] = useState<any[]>([]);
   const [loadingApplications, setLoadingApplications] = useState(false);
   const [processingApp, setProcessingApp] = useState<string | null>(null);
 
@@ -678,7 +678,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4001/api'}/academy/applications`, { credentials: 'include' });
       const json = await res.json();
-      if (json.applications) setApplications(json.applications);
+      if (json.applications) setAcademyApplications(json.applications);
     } catch { /* ignore */ }
     finally { setLoadingApplications(false); }
   };
@@ -689,7 +689,7 @@ export default function AdminDashboard() {
       const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4001/api'}/academy/applications/${id}/approve`, { method: 'POST', credentials: 'include' });
       const json = await res.json();
       if (json.success) {
-        setApplications((prev) => prev.map((a) => a.id === id ? { ...a, status: 'approved' } : a));
+        setAcademyApplications((prev) => prev.map((a) => a.id === id ? { ...a, status: 'approved' } : a));
         toast.success('Tutor application approved');
       } else toast.error(json.error || 'Failed to approve');
     } catch { toast.error('Network error'); }
@@ -702,7 +702,7 @@ export default function AdminDashboard() {
       const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4001/api'}/academy/applications/${id}/reject`, { method: 'POST', credentials: 'include' });
       const json = await res.json();
       if (json.success) {
-        setApplications((prev) => prev.map((a) => a.id === id ? { ...a, status: 'rejected' } : a));
+        setAcademyApplications((prev) => prev.map((a) => a.id === id ? { ...a, status: 'rejected' } : a));
         toast.success('Tutor application rejected');
       } else toast.error(json.error || 'Failed to reject');
     } catch { toast.error('Network error'); }

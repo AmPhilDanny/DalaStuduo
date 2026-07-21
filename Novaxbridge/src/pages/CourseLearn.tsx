@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, BookOpen, Play, FileText, Video, CheckCircle2, Clock, ArrowLeft, Menu as MenuIcon, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, BookOpen, Play, FileText, Video, CheckCircle2, Clock, ArrowLeft, Menu as MenuIcon, X, ChevronLeft, ChevronRight, Brain } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Lesson {
@@ -45,6 +45,7 @@ export default function CourseLearn() {
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [completions, setCompletions] = useState<Set<string>>(new Set());
   const [completing, setCompleting] = useState<string | null>(null);
+  const [spawningTutor, setSpawningTutor] = useState(false);
 
   useEffect(() => {
     if (!user || !courseId) return;
@@ -147,6 +148,43 @@ export default function CourseLearn() {
       toast.error(err.message || 'Failed to mark complete');
     } finally {
       setCompleting(null);
+    }
+  };
+
+  const openAiTutor = async () => {
+    if (!user || !course || !selectedLesson) return;
+    setSpawningTutor(true);
+    try {
+      const { data: session, error: sessionError } = await supabase
+        .from('tutor_sessions')
+        .insert({
+          student_id: user.id,
+          title: `${course.title} — ${selectedLesson.title}`,
+          topic: selectedLesson.title,
+          course_id: course.id,
+          lesson_id: selectedLesson.id,
+          status: 'active',
+        })
+        .select()
+        .single();
+
+      if (sessionError || !session) throw sessionError || new Error('Failed to create session');
+
+      if (selectedLesson.content_body) {
+        await supabase.from('knowledge_base').insert({
+          owner_id: user.id,
+          title: `Lesson: ${selectedLesson.title}`,
+          content: selectedLesson.content_body,
+          source_type: 'manual',
+          tags: [course.id, selectedLesson.id],
+        }).maybeSingle();
+      }
+
+      navigate(`/tutor/${session.id}`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to start AI tutor');
+    } finally {
+      setSpawningTutor(false);
     }
   };
 
@@ -281,8 +319,10 @@ export default function CourseLearn() {
             <div className="text-center py-12">
               <Video className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="font-semibold mb-2">Live Session</h3>
-              <p className="text-sm text-muted-foreground mb-4">This lesson is a live scheduled session.</p>
-              <Button variant="outline" disabled>Join Session (Coming Soon)</Button>
+              <p className="text-sm text-muted-foreground mb-4">This is a live interactive session. Join when it's time.</p>
+              <Button variant="default" onClick={() => navigate(`/video-call/${course.id}-${selectedLesson.id}`)} className="gap-2">
+                <Video className="w-4 h-4" /> Join Live Session
+              </Button>
             </div>
           ) : (
             <div className="text-center py-12">
@@ -290,6 +330,23 @@ export default function CourseLearn() {
               <p className="text-muted-foreground">Lesson content not available yet.</p>
             </div>
           )}
+
+          {/* AI Tutor */}
+          <div className="flex justify-center mt-6">
+            <Button
+              variant="outline"
+              onClick={openAiTutor}
+              disabled={spawningTutor}
+              className="gap-2"
+            >
+              {spawningTutor ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Brain className="w-4 h-4 text-secondary" />
+              )}
+              {spawningTutor ? 'Starting...' : 'Ask AI Tutor about this lesson'}
+            </Button>
+          </div>
 
           {/* Complete button */}
           <div className="flex items-center justify-between mt-8 pt-4 border-t">
