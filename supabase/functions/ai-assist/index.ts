@@ -398,10 +398,16 @@ Student profile:
 
   const messages = [
     { role: "system", content: systemMessage },
-    ...(body.messages || []).map((m) => ({
-      role: m.role === "tutor" ? "assistant" : m.role as "user" | "assistant",
-      content: m.content,
-    })),
+    ...(body.messages || []).map((m) => {
+      let role = m.role;
+      if (role === "tutor") role = "assistant";
+      else if (role === "student") role = "user";
+      
+      return {
+        role: role as "user" | "assistant",
+        content: m.content,
+      };
+    }),
   ];
 
   return await chatAiProvider(messages);
