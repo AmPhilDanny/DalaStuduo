@@ -40,17 +40,51 @@ interface ProviderConfig {
 const ACTIVE_PROVIDER = (Deno.env.get("AI_PROVIDER") || "openrouter") as AiProvider;
 
 // ── Helper: read API keys from site_settings DB (admin-set via dashboard) ──
-// The admin dashboard stores all keys in a single row with key='ai_api_keys'
-// and value = { openrouter: "sk-...", openai: "sk-...", ... }
+// Two possible storage formats:
+//   NEW (server POST /ai/keys):   key='ai_api_keys', value={ openrouter: "sk-...", ... }
+//   OLD (direct Supabase insert):  key='ai_openrouter_key', value={ api_key: "sk-..." }
 async function loadDbApiKeys(): Promise<Partial<Record<AiProvider, string>>> {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!serviceRoleKey) return {};
 
   try {
     const svc = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
-    const { data } = await svc.from("site_settings").select("value").eq("key", "ai_api_keys").maybeSingle();
-    if (!data?.value || typeof data.value !== "object") return {};
-    return data.value as Partial<Record<AiProvider, string>>;
+
+    // Try NEW format first: single row key='ai_api_keys'
+    const { data: newRow } = await svc.from("site_settings").select("value").eq("key", "ai_api_keys").maybeSingle();
+    if (newRow?.value && typeof newRow.value === "object") {
+      const keys = newRow.value as Partial<Record<AiProvider, string>>;
+      // Check if at least one provider has a key
+      if (Object.values(keys).some((v) => typeof v === "string" && v.length > 0)) {
+        return keys;
+      }
+    }
+
+    // Fallback to OLD format: individual rows key='ai_{provider}_key', value={ api_key: "..." }
+    const OLD_KEY_MAP: Record<string, AiProvider> = {
+      ai_openrouter_key: "openrouter",
+      ai_mistral_key: "mistral",
+      ai_openai_key: "openai",
+      ai_groq_key: "groq",
+      ai_google_key: "google",
+      ai_togetherai_key: "togetherai",
+    };
+    const { data: oldRows } = await svc
+      .from("site_settings")
+      .select("key, value")
+      .in("key", Object.keys(OLD_KEY_MAP));
+    if (oldRows) {
+      const result: Partial<Record<AiProvider, string>> = {};
+      for (const row of oldRows) {
+        const provider = OLD_KEY_MAP[row.key];
+        if (provider && row.value?.api_key) {
+          result[provider] = String(row.value.api_key);
+        }
+      }
+      if (Object.keys(result).length > 0) return result;
+    }
+
+    return {};
   } catch {
     return {};
   }
