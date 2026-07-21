@@ -76,7 +76,7 @@ const DEFAULT_CONFIG: SiteConfig = {
       { name: 'Talent', href: '/talent' },
       { name: 'Projects', href: '/projects' },
       { name: 'Jobs', href: '/jobs' },
-      { name: 'Tutor', href: '/tutor' },
+      { name: 'Academy', href: '/academy' },
       { name: 'Programs', href: '/#programs' },
     ],
   },
