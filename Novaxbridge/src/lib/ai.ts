@@ -106,8 +106,8 @@ export async function callAIAssist(payload: AIAssistPayload): Promise<string> {
     body: payload,
   });
 
-  if (error) throw new Error(error.message || 'AI request failed');
   if (data?.error) throw new Error(data.error);
+  if (error) throw new Error(error.message || 'AI request failed');
   return data?.result || '';
 }
 
@@ -123,8 +123,9 @@ export async function callTutorAI(payload: TutorPayload): Promise<string | Tutor
     body: payload,
   });
 
-  if (error) throw new Error(error.message || 'AI Tutor request failed');
+  // Surface the actual error from the response body, not the generic HTTP wrapper
   if (data?.error) throw new Error(data.error);
+  if (error) throw new Error(error.message || 'AI Tutor request failed');
 
   // tutor_grade returns structured data, others return { result: "..." }
   if (payload.mode === 'tutor_grade') {
