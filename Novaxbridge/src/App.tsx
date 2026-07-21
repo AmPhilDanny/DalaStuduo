@@ -16,6 +16,12 @@ import ProjectCollaboration from "@/pages/ProjectCollaboration";
 import MyApplications from "@/pages/MyApplications";
 import Tutor from "@/pages/Tutor";
 import TutorChat from "@/pages/TutorChat";
+import Academy from "@/pages/Academy";
+import CourseDetail from "@/pages/CourseDetail";
+import CourseLearn from "@/pages/CourseLearn";
+import CreateCourse from "@/pages/CreateCourse";
+import MyCourses from "@/pages/MyCourses";
+import TutorApply from "@/pages/TutorApply";
 import UserDashboard from "@/pages/UserDashboard";
 import PostJob from "@/pages/PostJob";
 import Marketplace from "@/pages/Marketplace";
@@ -109,6 +115,12 @@ function App() {
               <Route path="/my-applications" element={<MyApplications />} />
               <Route path="/tutor" element={<Tutor />} />
               <Route path="/tutor/:id" element={<TutorChat />} />
+              <Route path="/academy" element={<Academy />} />
+              <Route path="/academy/create" element={<CreateCourse />} />
+              <Route path="/academy/:slug" element={<CourseDetail />} />
+              <Route path="/academy/apply" element={<TutorApply />} />
+              <Route path="/academy/learn/:courseId" element={<CourseLearn />} />
+              <Route path="/my-courses" element={<MyCourses />} />
               <Route path="/dashboard" element={<UserDashboard />} />
               <Route path="/dashboard/org" element={<Navigate to="/dashboard" replace />} />
               <Route path="/jobs/new" element={<PostJob />} />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Rocket, LogOut, User, Bell, Package, Wallet as WalletIcon, Store, Shield, ChevronDown, LayoutDashboard, Settings, Users, MessageSquare, Building2, CreditCard } from 'lucide-react';
+import { Menu, X, Rocket, LogOut, User, Bell, Package, Wallet as WalletIcon, Store, Shield, ChevronDown, LayoutDashboard, Settings, Users, MessageSquare, Building2, CreditCard, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -97,6 +97,7 @@ export function Navbar() {
         { name: 'Talent', href: '/talent' },
         { name: 'Projects', href: '/projects' },
         { name: 'Jobs', href: '/jobs' },
+        { name: 'Academy', href: '/academy' },
         { name: 'Tutor', href: '/tutor' },
         { name: 'Programs', href: '/#programs' },
       ];
@@ -222,6 +223,12 @@ export function Navbar() {
                     <Link to="/dashboard" className="cursor-pointer flex items-center gap-2">
                       <LayoutDashboard className="w-4 h-4" />
                       <span>Dashboard</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/my-courses" className="cursor-pointer flex items-center gap-2">
+                      <GraduationCap className="w-4 h-4" />
+                      <span>My Courses</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
@@ -379,6 +386,9 @@ export function Navbar() {
               <div className="flex flex-col gap-1">
                 <Link to="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
                   <LayoutDashboard className="w-4 h-4" /> Dashboard
+                </Link>
+                <Link to="/my-courses" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                  <GraduationCap className="w-4 h-4" /> My Courses
                 </Link>
                 <Link to="/profile" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
                   <User className="w-4 h-4" /> Profile
