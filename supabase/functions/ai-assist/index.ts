@@ -3,13 +3,17 @@
 // Modes: cv_revamp | cover_letter | skill_gap | project_polish
 //        | tutor_chat | tutor_reflect | tutor_quiz | tutor_grade
 //
-// PROVIDER FACTORY (VCC-style, configurable via env vars):
+// PROVIDER FACTORY (VCC-style, configurable via env vars OR admin dashboard):
 //   AI_PROVIDER=openrouter  → OpenRouter (Gemini, Claude, GPT, Llama, etc.)
 //   AI_PROVIDER=mistral     → Mistral AI (mistral-large, mistral-medium, etc.)
 //   AI_PROVIDER=openai      → OpenAI (GPT-4o, GPT-4o-mini, etc.)
 //   AI_PROVIDER=groq        → Groq (Llama 3, Mixtral, etc.)
 //   AI_PROVIDER=google      → Google Gemini (gemini-2.0-flash, etc.)
 //   AI_PROVIDER=togetherai  → Together AI (Llama, Mistral, etc.)
+//
+//   NOTE: The admin dashboard "preferred provider" setting
+//   (stored as site_config.api_keys.preferred in site_settings)
+//   takes priority over the AI_PROVIDER env var at request time.
 //
 // API keys live ONLY on the server — never in frontend code.
 //
@@ -37,99 +41,8 @@ interface ProviderConfig {
   label: string;
 }
 
-const ACTIVE_PROVIDER = (Deno.env.get("AI_PROVIDER") || "openrouter") as AiProvider;
-
-// ── Helper: read API keys from site_settings DB (admin-set via dashboard) ──
-// Two possible storage formats:
-//   NEW (server POST /ai/keys):   key='ai_api_keys', value={ openrouter: "sk-...", ... }
-//   OLD (direct Supabase insert):  key='ai_openrouter_key', value={ api_key: "sk-..." }
-async function loadDbApiKeys(): Promise<Partial<Record<AiProvider, string>>> {
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!serviceRoleKey) return {};
-
-  try {
-    const svc = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
-
-    // Try NEW format first: single row key='ai_api_keys'
-    const { data: newRow } = await svc.from("site_settings").select("value").eq("key", "ai_api_keys").maybeSingle();
-    if (newRow?.value && typeof newRow.value === "object") {
-      const keys = newRow.value as Partial<Record<AiProvider, string>>;
-      // Check if at least one provider has a key
-      if (Object.values(keys).some((v) => typeof v === "string" && v.length > 0)) {
-        return keys;
-      }
-    }
-
-    // Fallback to OLD format: individual rows key='ai_{provider}_key', value={ api_key: "..." }
-    const OLD_KEY_MAP: Record<string, AiProvider> = {
-      ai_openrouter_key: "openrouter",
-      ai_mistral_key: "mistral",
-      ai_openai_key: "openai",
-      ai_groq_key: "groq",
-      ai_google_key: "google",
-      ai_togetherai_key: "togetherai",
-    };
-    const { data: oldRows } = await svc
-      .from("site_settings")
-      .select("key, value")
-      .in("key", Object.keys(OLD_KEY_MAP));
-    if (oldRows) {
-      const result: Partial<Record<AiProvider, string>> = {};
-      for (const row of oldRows) {
-        const provider = OLD_KEY_MAP[row.key];
-        if (provider && row.value?.api_key) {
-          result[provider] = String(row.value.api_key);
-        }
-      }
-      if (Object.keys(result).length > 0) return result;
-    }
-
-    return {};
-  } catch {
-    return {};
-  }
-}
-
-const DB_API_KEYS = await loadDbApiKeys();
-
-const PROVIDERS: Record<AiProvider, ProviderConfig> = {
-  openrouter: {
-    baseUrl: "https://openrouter.ai/api/v1",
-    apiKey: DB_API_KEYS.openrouter || Deno.env.get("OPENROUTER_API_KEY") || "",
-    defaultModel: Deno.env.get("OPENROUTER_MODEL") || "google/gemini-2.0-flash-001",
-    label: "OpenRouter",
-  },
-  mistral: {
-    baseUrl: "https://api.mistral.ai/v1",
-    apiKey: DB_API_KEYS.mistral || Deno.env.get("MISTRAL_API_KEY") || "",
-    defaultModel: Deno.env.get("MISTRAL_MODEL") || "mistral-large-latest",
-    label: "Mistral AI",
-  },
-  openai: {
-    baseUrl: "https://api.openai.com/v1",
-    apiKey: DB_API_KEYS.openai || Deno.env.get("OPENAI_API_KEY") || "",
-    defaultModel: Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini",
-    label: "OpenAI",
-  },
-  groq: {
-    baseUrl: "https://api.groq.com/openai/v1",
-    apiKey: DB_API_KEYS.groq || Deno.env.get("GROQ_API_KEY") || "",
-    defaultModel: Deno.env.get("GROQ_MODEL") || "llama-3.3-70b-versatile",
-    label: "Groq",
-  },
-  google: {
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-    apiKey: DB_API_KEYS.google || Deno.env.get("GOOGLE_API_KEY") || "",
-    defaultModel: Deno.env.get("GOOGLE_MODEL") || "gemini-2.0-flash",
-    label: "Google Gemini",
-  },
-  togetherai: {
-    baseUrl: "https://api.together.xyz/v1",
-    apiKey: DB_API_KEYS.togetherai || Deno.env.get("TOGETHER_API_KEY") || "",
-    defaultModel: Deno.env.get("TOGETHER_MODEL") || "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-    label: "Together AI",
-  },
-};
+// Fallback provider from env var (used when no preferred provider is set in DB)
+const ENV_PROVIDER = (Deno.env.get("AI_PROVIDER") || "openrouter") as AiProvider;
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -142,6 +55,134 @@ const PROVIDER_KEY_MAP: Record<AiProvider, string> = {
   google: "GOOGLE_API_KEY",
   togetherai: "TOGETHER_API_KEY",
 };
+
+// ── Helper: read API keys AND preferred provider from site_settings ──
+// Returns { keys: {...}, preferredProvider: string | null }
+async function loadDbSettings(): Promise<{
+  keys: Partial<Record<AiProvider, string>>;
+  preferredProvider: AiProvider | null;
+}> {
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!serviceRoleKey) return { keys: {}, preferredProvider: null };
+
+  try {
+    const svc = createClient(SUPABASE_URL, serviceRoleKey);
+
+    // Load all relevant site_settings rows in one query
+    const { data: rows } = await svc
+      .from("site_settings")
+      .select("key, value")
+      .in("key", ["ai_api_keys", "site_config"]);
+
+    let keys: Partial<Record<AiProvider, string>> = {};
+    let preferredProvider: AiProvider | null = null;
+
+    for (const row of rows || []) {
+      if (row.key === "ai_api_keys" && row.value && typeof row.value === "object") {
+        // API keys: { openrouter: "sk-...", groq: "gsk_...", ... }
+        const rawKeys = row.value as Partial<Record<AiProvider, string>>;
+        if (Object.values(rawKeys).some((v) => typeof v === "string" && v.length > 0)) {
+          keys = rawKeys;
+        }
+      }
+
+      if (row.key === "site_config" && row.value && typeof row.value === "object") {
+        // Preferred provider: site_config.api_keys.preferred
+        const siteConfig = row.value as Record<string, unknown>;
+        const apiKeys = siteConfig.api_keys as Record<string, unknown> | undefined;
+        const pref = apiKeys?.preferred;
+        if (pref && typeof pref === "string" && pref.length > 0) {
+          preferredProvider = pref as AiProvider;
+        }
+      }
+    }
+
+    // Fallback: try old per-row format for API keys if new format is empty
+    if (Object.keys(keys).length === 0) {
+      const OLD_KEY_MAP: Record<string, AiProvider> = {
+        ai_openrouter_key: "openrouter",
+        ai_mistral_key: "mistral",
+        ai_openai_key: "openai",
+        ai_groq_key: "groq",
+        ai_google_key: "google",
+        ai_togetherai_key: "togetherai",
+      };
+      const { data: oldRows } = await svc
+        .from("site_settings")
+        .select("key, value")
+        .in("key", Object.keys(OLD_KEY_MAP));
+      if (oldRows) {
+        const result: Partial<Record<AiProvider, string>> = {};
+        for (const row of oldRows) {
+          const provider = OLD_KEY_MAP[row.key];
+          if (provider && row.value?.api_key) {
+            result[provider] = String(row.value.api_key);
+          }
+        }
+        if (Object.keys(result).length > 0) keys = result;
+      }
+    }
+
+    return { keys, preferredProvider };
+  } catch {
+    return { keys: {}, preferredProvider: null };
+  }
+}
+
+/** Build the full provider config map, resolving keys from DB then env vars. */
+async function getProviders(): Promise<{
+  providers: Record<AiProvider, ProviderConfig>;
+  activeProvider: AiProvider;
+}> {
+  const { keys: dbKeys, preferredProvider } = await loadDbSettings();
+
+  // Preferred provider: DB setting > AI_PROVIDER env var
+  const activeProvider: AiProvider = preferredProvider || ENV_PROVIDER;
+
+  const modelFor = (envKey: string, fallback: string) =>
+    Deno.env.get(envKey) || fallback;
+
+  const providers: Record<AiProvider, ProviderConfig> = {
+    openrouter: {
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiKey: dbKeys.openrouter || Deno.env.get("OPENROUTER_API_KEY") || "",
+      defaultModel: modelFor("OPENROUTER_MODEL", "google/gemini-2.0-flash-001"),
+      label: "OpenRouter",
+    },
+    mistral: {
+      baseUrl: "https://api.mistral.ai/v1",
+      apiKey: dbKeys.mistral || Deno.env.get("MISTRAL_API_KEY") || "",
+      defaultModel: modelFor("MISTRAL_MODEL", "mistral-large-latest"),
+      label: "Mistral AI",
+    },
+    openai: {
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: dbKeys.openai || Deno.env.get("OPENAI_API_KEY") || "",
+      defaultModel: modelFor("OPENAI_MODEL", "gpt-4o-mini"),
+      label: "OpenAI",
+    },
+    groq: {
+      baseUrl: "https://api.groq.com/openai/v1",
+      apiKey: dbKeys.groq || Deno.env.get("GROQ_API_KEY") || "",
+      defaultModel: modelFor("GROQ_MODEL", "llama-3.3-70b-versatile"),
+      label: "Groq",
+    },
+    google: {
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      apiKey: dbKeys.google || Deno.env.get("GOOGLE_API_KEY") || "",
+      defaultModel: modelFor("GOOGLE_MODEL", "gemini-2.0-flash"),
+      label: "Google Gemini",
+    },
+    togetherai: {
+      baseUrl: "https://api.together.xyz/v1",
+      apiKey: dbKeys.togetherai || Deno.env.get("TOGETHER_API_KEY") || "",
+      defaultModel: modelFor("TOGETHER_MODEL", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
+      label: "Together AI",
+    },
+  };
+
+  return { providers, activeProvider };
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -264,13 +305,14 @@ Return ONLY the description text, nothing else.`;
   }
 }
 
-/** Call the active AI provider (OpenRouter or Mistral) with an OpenAI-compatible chat completions request. */
+/** Call the active AI provider with an OpenAI-compatible chat completions request. */
 async function callAiProvider(prompt: string): Promise<string> {
-  const provider = PROVIDERS[ACTIVE_PROVIDER];
+  const { providers, activeProvider } = await getProviders();
+  const provider = providers[activeProvider];
 
   if (!provider.apiKey) {
     throw new Error(
-      `AI provider "${ACTIVE_PROVIDER}" is not configured. Set ${PROVIDER_KEY_MAP[ACTIVE_PROVIDER]} via supabase secrets.`
+      `AI provider "${activeProvider}" is not configured. Set ${PROVIDER_KEY_MAP[activeProvider]} via supabase secrets, or add the key in Admin → Site Settings → AI Settings.`
     );
   }
 
@@ -299,7 +341,15 @@ async function callAiProvider(prompt: string): Promise<string> {
 
 /** Chat with the AI provider using conversation history (for tutor_chat mode). */
 async function chatAiProvider(messages: Array<{ role: string; content: string }>): Promise<string> {
-  const provider = PROVIDERS[ACTIVE_PROVIDER];
+  const { providers, activeProvider } = await getProviders();
+  const provider = providers[activeProvider];
+
+  // Guard: ensure API key is configured before attempting the request
+  if (!provider.apiKey) {
+    throw new Error(
+      `AI provider "${activeProvider}" is not configured. Set ${PROVIDER_KEY_MAP[activeProvider]} via supabase secrets, or add the key in Admin → Site Settings → AI Settings.`
+    );
+  }
 
   const response = await fetch(`${provider.baseUrl}/chat/completions`, {
     method: "POST",
@@ -457,11 +507,18 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const provider = PROVIDERS[ACTIVE_PROVIDER];
+    // Resolve provider config dynamically per request (reads DB + env vars)
+    const { providers, activeProvider } = await getProviders();
+    const provider = providers[activeProvider];
+
     if (!provider.apiKey) {
-      const keyName = PROVIDER_KEY_MAP[ACTIVE_PROVIDER];
+      const keyName = PROVIDER_KEY_MAP[activeProvider];
       return new Response(
-        JSON.stringify({ error: `AI provider "${ACTIVE_PROVIDER}" is not configured. Set ${keyName} via: supabase secrets set ${keyName}=...` }),
+        JSON.stringify({
+          error: `AI provider "${activeProvider}" is not configured. ` +
+            `Please add an API key for this provider in Admin → Site Settings → AI Settings, ` +
+            `or set the ${keyName} secret via: supabase secrets set ${keyName}=...`
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -528,7 +585,7 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected server error";
-    console.error(`ai-assist (${ACTIVE_PROVIDER}) error:`, message);
+    console.error(`ai-assist error:`, message);
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
