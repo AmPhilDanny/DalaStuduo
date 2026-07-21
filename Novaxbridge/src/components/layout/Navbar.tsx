@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Rocket, LogOut, User, Bell, Package, Wallet as WalletIcon, Store, Shield, ChevronDown, LayoutDashboard, Settings, Users, MessageSquare, Building2, CreditCard, GraduationCap } from 'lucide-react';
+import { Menu, X, Rocket, LogOut, User, Bell, Package, Wallet as WalletIcon, Store, Shield, ChevronDown, LayoutDashboard, Settings, Users, MessageSquare, Building2, CreditCard, GraduationCap, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -231,6 +231,14 @@ export function Navbar() {
                       <span>My Courses</span>
                     </Link>
                   </DropdownMenuItem>
+                  {profile?.role && ['tutor', 'admin', 'super_admin'].includes(profile.role) && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/tutor-dashboard" className="cursor-pointer flex items-center gap-2">
+                        <BookOpen className="w-4 h-4" />
+                        <span>Tutor Dashboard</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem asChild>
                     <Link to="/profile" className="cursor-pointer flex items-center gap-2">
                       <User className="w-4 h-4" />
@@ -390,6 +398,11 @@ export function Navbar() {
                 <Link to="/my-courses" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
                   <GraduationCap className="w-4 h-4" /> My Courses
                 </Link>
+                {profile?.role && ['tutor', 'admin', 'super_admin'].includes(profile.role) && (
+                  <Link to="/tutor-dashboard" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                    <BookOpen className="w-4 h-4" /> Tutor Dashboard
+                  </Link>
+                )}
                 <Link to="/profile" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 text-sm font-medium text-muted-foreground hover:text-primary py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
                   <User className="w-4 h-4" /> Profile
                 </Link>

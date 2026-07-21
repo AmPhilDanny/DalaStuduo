@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { marketplaceApi } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -510,8 +511,8 @@ export default function CreateCourse() {
 
   // ── Toggle publish status ──
   const togglePublish = async (course: Course) => {
-    const newStatus = course.status === 'published' ? 'draft' : 'published';
-    if (newStatus === 'published') {
+    const goingLive = course.status !== 'published';
+    if (goingLive) {
       const { data: mods } = await supabase
         .from('course_modules')
         .select('id, lessons:id(*)')
@@ -522,13 +523,27 @@ export default function CreateCourse() {
     }
 
     try {
-      const { error } = await supabase
-        .from('courses')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', course.id);
+      const apiBase = import.meta.env.VITE_API_URL || 'https://dalastudioshowcase.onrender.com/api';
 
-      if (error) throw error;
-      toast.success(newStatus === 'published' ? 'Course published!' : 'Course unpublished');
+      if (goingLive) {
+        const res = await fetch(`${apiBase}/academy/courses/${course.id}/publish`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Failed to publish');
+        toast.success('Course published and listed on marketplace!');
+      } else {
+        const res = await fetch(`${apiBase}/academy/courses/${course.id}/unpublish`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Failed to unpublish');
+        toast.success('Course unpublished');
+      }
       fetchCourses();
     } catch (err: any) {
       toast.error(err.message || 'Failed to update course');

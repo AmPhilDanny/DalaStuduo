@@ -20,6 +20,7 @@ import Academy from "@/pages/Academy";
 import CourseDetail from "@/pages/CourseDetail";
 import CourseLearn from "@/pages/CourseLearn";
 import CreateCourse from "@/pages/CreateCourse";
+import MyTutorProfile from "@/pages/MyTutorProfile";
 import MyCourses from "@/pages/MyCourses";
 import TutorApply from "@/pages/TutorApply";
 import UserDashboard from "@/pages/UserDashboard";
@@ -121,6 +122,7 @@ function App() {
               <Route path="/academy/apply" element={<TutorApply />} />
               <Route path="/academy/learn/:courseId" element={<CourseLearn />} />
               <Route path="/my-courses" element={<MyCourses />} />
+              <Route path="/tutor-dashboard" element={<MyTutorProfile />} />
               <Route path="/dashboard" element={<UserDashboard />} />
               <Route path="/dashboard/org" element={<Navigate to="/dashboard" replace />} />
               <Route path="/jobs/new" element={<PostJob />} />

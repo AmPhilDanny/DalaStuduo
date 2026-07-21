@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Loader2, BookOpen, User, Play, FileText, Video, CheckCircle2, Clock, ArrowLeft, Lock } from 'lucide-react';
 import { toast } from 'sonner';
+import { marketplaceApi } from '@/lib/api-client';
 
 interface Lesson {
   id: string;
@@ -97,7 +98,7 @@ export default function CourseDetail() {
 
     setEnrolling(true);
     try {
-      if (course.price === 0) {
+      if (course.price === 0 || !course.listing_id) {
         const { error } = await supabase.from('enrollments').insert({
           course_id: course.id,
           student_id: user.id,
@@ -105,18 +106,28 @@ export default function CourseDetail() {
         });
         if (error) throw error;
         setEnrollmentStatus('active');
-        toast.success('Enrolled! Start learning now.');
+        toast.success(course.price === 0 ? 'Enrolled! Start learning now.' : 'Enrolled!');
       } else {
-        // Future: redirect to checkout with marketplace listing
-        toast.info('Paid course checkout coming soon. Free enrollment for now.');
-        const { error } = await supabase.from('enrollments').insert({
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'https://dalastudioshowcase.onrender.com/api'}/marketplace/orders`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ listing_id: course.listing_id }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Failed to create order');
+
+        const order = json.data;
+        await supabase.from('enrollments').insert({
           course_id: course.id,
           student_id: user.id,
+          order_id: order.id,
           status: 'active',
         });
-        if (error) throw error;
+
         setEnrollmentStatus('active');
-        toast.success('Enrolled!');
+        toast.success('Enrolled! Proceed to payment.');
+        navigate('/orders');
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to enroll');
