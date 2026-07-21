@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Rocket, LogOut, User, Bell, Package, Wallet as WalletIcon, Store, Shield, ChevronDown, LayoutDashboard, Settings, Users, MessageSquare, Building2, CreditCard, GraduationCap, BookOpen } from 'lucide-react';
+import { Menu, X, Rocket, LogOut, User, Bell, Package, Wallet as WalletIcon, Store, Shield, ChevronDown, LayoutDashboard, Settings, Users, MessageSquare, Building2, CreditCard, GraduationCap, BookOpen, Plus, BookOpenCheck, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -31,6 +31,12 @@ export function Navbar() {
   const [loadingNotifs, setLoadingNotifs] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
+  const [academyOpen, setAcademyOpen] = useState(false);
+  const academyRef = useRef<HTMLDivElement>(null);
+  const [mobileAcademyOpen, setMobileAcademyOpen] = useState(false);
+
+  const isTutorOrAdmin = profile?.role && ['tutor', 'admin', 'super_admin'].includes(profile.role);
+
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
@@ -49,11 +55,14 @@ export function Navbar() {
     return () => clearInterval(interval);
   }, [user]);
 
-  // Close notification dropdown on click outside
+  // Close notification and academy dropdowns on click outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setNotifOpen(false);
+      }
+      if (academyRef.current && !academyRef.current.contains(e.target as Node)) {
+        setAcademyOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -98,7 +107,6 @@ export function Navbar() {
         { name: 'Projects', href: '/projects' },
         { name: 'Jobs', href: '/jobs' },
         { name: 'Academy', href: '/academy' },
-        { name: 'Tutor', href: '/tutor' },
         { name: 'Programs', href: '/#programs' },
       ];
 
@@ -134,16 +142,96 @@ export function Navbar() {
 
         {/* Desktop Links */}
         <div className="hidden lg:flex items-center gap-6">
-          {navLinks.map((link) => (
-            <Link
-              key={link.name}
-              to={link.href}
-              onClick={(e) => handleNavClick(e, link.href)}
-              className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors whitespace-nowrap"
-            >
-              {link.name}
-            </Link>
-          ))}
+          {navLinks.map((link) => {
+            if (link.name === 'Academy') {
+              return (
+                <div key="academy" className="relative" ref={academyRef}>
+                  <button
+                    onClick={() => setAcademyOpen(!academyOpen)}
+                    className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-primary transition-colors whitespace-nowrap"
+                  >
+                    {link.name}
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${academyOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {academyOpen && (
+                    <div className="absolute top-full left-0 mt-2 w-52 bg-card border border-border rounded-xl shadow-xl z-50 py-2">
+                      <Link
+                        to="/academy"
+                        onClick={() => setAcademyOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        <LayoutDashboard className="w-4 h-4 text-secondary" />
+                        Dashboard
+                      </Link>
+                      <Link
+                        to="/academy/browse"
+                        onClick={() => setAcademyOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        <BookOpen className="w-4 h-4 text-secondary" />
+                        Browse Courses
+                      </Link>
+                      <Link
+                        to="/my-courses"
+                        onClick={() => setAcademyOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        <GraduationCap className="w-4 h-4 text-secondary" />
+                        My Courses
+                      </Link>
+                      <Link
+                        to="/academy/ai-tutor"
+                        onClick={() => setAcademyOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        <Sparkles className="w-4 h-4 text-secondary" />
+                        AI Tutor
+                      </Link>
+                      <div className="my-1 border-t border-border" />
+                      {isTutorOrAdmin && (
+                        <Link
+                          to="/tutor-dashboard"
+                          onClick={() => setAcademyOpen(false)}
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground hover:bg-muted/50 transition-colors"
+                        >
+                          <BookOpenCheck className="w-4 h-4 text-secondary" />
+                          Tutor Dashboard
+                        </Link>
+                      )}
+                      <Link
+                        to="/academy/apply"
+                        onClick={() => setAcademyOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        <Users className="w-4 h-4 text-secondary" />
+                        Become a Tutor
+                      </Link>
+                      {isTutorOrAdmin && (
+                        <Link
+                          to="/academy/create"
+                          onClick={() => setAcademyOpen(false)}
+                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground hover:bg-muted/50 transition-colors"
+                        >
+                          <Plus className="w-4 h-4 text-secondary" />
+                          Create Course
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <Link
+                key={link.name}
+                to={link.href}
+                onClick={(e) => handleNavClick(e, link.href)}
+                className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors whitespace-nowrap"
+              >
+                {link.name}
+              </Link>
+            );
+          })}
           {user ? (
             <div className="flex items-center gap-3 ml-2">
               {/* Notification Bell */}
@@ -359,17 +447,61 @@ export function Navbar() {
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
         <div className="lg:hidden absolute top-full left-0 right-0 max-h-[calc(100vh-4rem)] overflow-y-auto bg-background border-b border-border p-4 shadow-xl">
-          <div className="flex flex-col gap-2">
-            {navLinks.map((link) => (
-              <Link
-                key={link.name}
-                to={link.href}
-                onClick={(e) => handleNavClick(e, link.href)}
-                className="text-base font-medium text-muted-foreground hover:text-primary py-2 px-2 rounded-md hover:bg-muted/50 transition-colors"
-              >
-                {link.name}
-              </Link>
-            ))}
+          <div className="flex flex-col gap-1">
+            {navLinks.map((link) => {
+              if (link.name === 'Academy') {
+                return (
+                  <div key="academy" className="flex flex-col">
+                    <button
+                      onClick={() => setMobileAcademyOpen(!mobileAcademyOpen)}
+                      className="flex items-center justify-between text-base font-medium text-muted-foreground hover:text-primary py-2 px-2 rounded-md hover:bg-muted/50 transition-colors"
+                    >
+                      <span>Academy</span>
+                      <ChevronDown className={`w-4 h-4 transition-transform ${mobileAcademyOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {mobileAcademyOpen && (
+                      <div className="ml-3 flex flex-col gap-0.5 border-l-2 border-border pl-3 mt-0.5">
+                        <Link to="/academy" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                          <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
+                        </Link>
+                        <Link to="/academy/browse" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                          <BookOpen className="w-3.5 h-3.5" /> Browse Courses
+                        </Link>
+                        <Link to="/my-courses" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                          <GraduationCap className="w-3.5 h-3.5" /> My Courses
+                        </Link>
+                        <Link to="/academy/ai-tutor" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                          <Sparkles className="w-3.5 h-3.5" /> AI Tutor
+                        </Link>
+                        {isTutorOrAdmin && (
+                          <Link to="/tutor-dashboard" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                            <BookOpenCheck className="w-3.5 h-3.5" /> Tutor Dashboard
+                          </Link>
+                        )}
+                        <Link to="/academy/apply" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                          <Users className="w-3.5 h-3.5" /> Become a Tutor
+                        </Link>
+                        {isTutorOrAdmin && (
+                          <Link to="/academy/create" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                            <Plus className="w-3.5 h-3.5" /> Create Course
+                          </Link>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <Link
+                  key={link.name}
+                  to={link.href}
+                  onClick={(e) => handleNavClick(e, link.href)}
+                  className="text-base font-medium text-muted-foreground hover:text-primary py-2 px-2 rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  {link.name}
+                </Link>
+              );
+            })}
           </div>
 
           {user ? (

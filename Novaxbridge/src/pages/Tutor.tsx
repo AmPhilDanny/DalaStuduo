@@ -18,7 +18,12 @@ const STATUS_UI: Record<string, { label: string; className: string; icon: typeof
   completed: { label: 'Completed', className: 'bg-muted text-muted-foreground', icon: CheckCircle2 },
 };
 
-export default function Tutor() {
+interface TutorProps {
+  compact?: boolean;
+  basePath?: string;
+}
+
+export default function Tutor({ compact, basePath = '/tutor' }: TutorProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<TutorSession[]>([]);
@@ -71,7 +76,7 @@ export default function Tutor() {
       setNewTopic('');
       if (data) {
         setSessions((prev) => [data as unknown as TutorSession, ...prev]);
-        navigate(`/tutor/${data.id}`);
+        navigate(`${basePath}/${data.id}`);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Error creating session');
@@ -82,8 +87,8 @@ export default function Tutor() {
 
   if (!user) {
     return (
-      <div className="min-h-screen pt-24 pb-12 px-4">
-        <div className="container mx-auto max-w-6xl text-center py-24">
+      <div className={compact ? '' : 'min-h-screen pt-24 pb-12 px-4'}>
+        <div className={compact ? 'text-center py-12' : 'container mx-auto max-w-6xl text-center py-24'}>
           <GraduationCap className="w-16 h-16 text-secondary mx-auto mb-6" />
           <h1 className="text-3xl font-bold mb-3">AI Tutor</h1>
           <p className="text-muted-foreground mb-6">Sign in to start your tutoring sessions.</p>
@@ -94,8 +99,8 @@ export default function Tutor() {
   }
 
   return (
-    <div className="min-h-screen pt-24 pb-12 px-4">
-      <div className="container mx-auto max-w-6xl">
+    <div className={compact ? '' : 'min-h-screen pt-24 pb-12 px-4'}>
+      <div className={compact ? 'mx-auto' : 'container mx-auto max-w-6xl'}>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
           <div>
             <h1 className="text-4xl font-bold text-primary mb-2 flex items-center gap-3">
@@ -174,7 +179,7 @@ export default function Tutor() {
                 <Card
                   key={session.id}
                   className="hover:shadow-lg transition-shadow cursor-pointer"
-                  onClick={() => navigate(`/tutor/${session.id}`)}
+                  onClick={() => navigate(`${basePath}/${session.id}`)}
                 >
                   <CardHeader>
                     <div className="flex items-start justify-between">

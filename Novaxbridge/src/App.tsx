@@ -17,6 +17,8 @@ import MyApplications from "@/pages/MyApplications";
 import Tutor from "@/pages/Tutor";
 import TutorChat from "@/pages/TutorChat";
 import Academy from "@/pages/Academy";
+import AcademyDashboard from "@/pages/AcademyDashboard";
+import AcademySubnav from "@/components/academy/AcademySubnav";
 import CourseDetail from "@/pages/CourseDetail";
 import CourseLearn from "@/pages/CourseLearn";
 import CreateCourse from "@/pages/CreateCourse";
@@ -114,13 +116,31 @@ function App() {
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/projects/:id/collaboration" element={<ProjectCollaboration />} />
               <Route path="/my-applications" element={<MyApplications />} />
+              {/* Academy — nested routes with subnav */}
+              <Route path="/academy" element={
+                <>
+                  <AcademySubnav />
+                  <div className="pt-16 pb-12 px-4 lg:px-8">
+                    <div className="mx-auto max-w-7xl">
+                      <Outlet />
+                    </div>
+                  </div>
+                </>
+              }>
+                <Route index element={<AcademyDashboard />} />
+                <Route path="browse" element={<Academy />} />
+                <Route path="create" element={<CreateCourse />} />
+                <Route path="apply" element={<TutorApply />} />
+                <Route path="ai-tutor" element={<Tutor compact basePath="/academy/ai-tutor" />} />
+                <Route path="ai-tutor/:id" element={<TutorChat />} />
+                <Route path="learn/:courseId" element={<CourseLearn />} />
+                <Route path=":slug" element={<CourseDetail />} />
+              </Route>
+
+              {/* Standalone /tutor routes — still work for backward compat */}
               <Route path="/tutor" element={<Tutor />} />
               <Route path="/tutor/:id" element={<TutorChat />} />
-              <Route path="/academy" element={<Academy />} />
-              <Route path="/academy/create" element={<CreateCourse />} />
-              <Route path="/academy/:slug" element={<CourseDetail />} />
-              <Route path="/academy/apply" element={<TutorApply />} />
-              <Route path="/academy/learn/:courseId" element={<CourseLearn />} />
+
               <Route path="/my-courses" element={<MyCourses />} />
               <Route path="/tutor-dashboard" element={<MyTutorProfile />} />
               <Route path="/dashboard" element={<UserDashboard />} />
