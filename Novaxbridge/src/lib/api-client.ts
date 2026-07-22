@@ -140,16 +140,6 @@ export const githubApi = {
   disconnect: () => del('/github/connection'),
 };
 
-// ── Playground API helpers ──
-
-export const playgroundApi = {
-  list: () => get('/academy/playground/workspaces'),
-  create: (data: { name: string; course_id?: string; lesson_id?: string }) => post('/academy/playground/workspaces', data),
-  get: (id: string) => get(`/academy/playground/workspaces/${id}`),
-  updateOpened: (id: string) => patch(`/academy/playground/workspaces/${id}/opened`),
-  remove: (id: string) => del(`/academy/playground/workspaces/${id}`),
-};
-
 // ── Marketplace API helpers ──
 
 export const marketplaceApi = {
