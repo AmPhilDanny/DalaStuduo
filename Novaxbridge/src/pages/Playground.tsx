@@ -52,8 +52,6 @@ function makeEditorUrl(repoUrl: string): string {
 }
 
 export default function Playground() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
