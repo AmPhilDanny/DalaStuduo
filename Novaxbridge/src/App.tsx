@@ -4,7 +4,11 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/hooks/useAuth";
+import { SocketProvider } from "@/hooks/useSocket";
+import { CallProvider } from "@/hooks/useCall";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import IncomingCallDialog from "@/components/video-call/IncomingCallDialog";
+import OutgoingCallStatus from "@/components/video-call/OutgoingCallStatus";
 import Home from "@/pages/Home";
 import Auth from "@/pages/Auth";
 import Jobs from "@/pages/Jobs";
@@ -102,96 +106,98 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <MetaUpdater />
-        <div className="min-h-screen bg-background text-foreground selection:bg-secondary/30 selection:text-primary">
-          <Navbar />
-          <main>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/jobs" element={<Jobs />} />
-              <Route path="/talent" element={<Talent />} />
-              <Route path="/talent/:id" element={<Profile />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/projects" element={<Projects />} />
-              <Route path="/projects/:id" element={<ProjectDetail />} />
-              <Route path="/projects/:id/collaboration" element={<ProjectCollaboration />} />
-              <Route path="/my-applications" element={<MyApplications />} />
-              {/* Academy — nested routes with subnav */}
-              <Route path="/academy" element={
-                <>
-                  <AcademySubnav />
-                  <div className="pt-16 pb-12 px-4 lg:px-8">
-                    <div className="mx-auto max-w-7xl">
-                      <Outlet />
-                    </div>
-                  </div>
-                </>
-              }>
-                <Route index element={<AcademyDashboard />} />
-                <Route path="browse" element={<Academy />} />
-                <Route path="create" element={<CreateCourse />} />
-                <Route path="apply" element={<TutorApply />} />
-                <Route path="ai-tutor" element={<Tutor compact basePath="/academy/ai-tutor" />} />
-                <Route path="ai-tutor/:id" element={<TutorChat />} />
-                <Route path="playground" element={<Playground />} />
-                <Route path="my-courses" element={<MyCourses />} />
-                <Route path="learn/:courseId" element={<CourseLearn />} />
-                <Route path=":slug" element={<CourseDetail />} />
-              </Route>
-
-              {/* Standalone /tutor routes — still work for backward compat */}
-              <Route path="/tutor" element={<Tutor />} />
-              <Route path="/tutor/:id" element={<TutorChat />} />
-
-              <Route path="/my-courses" element={<Navigate to="/academy/my-courses" replace />} />
-              <Route path="/tutor-dashboard" element={<MyTutorProfile />} />
-              <Route path="/dashboard" element={<UserDashboard />} />
-              <Route path="/dashboard/org" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/jobs/new" element={<PostJob />} />
-              <Route path="/marketplace" element={<Marketplace />} />
-              <Route path="/marketplace/new" element={<CreateListing />} />
-              <Route path="/marketplace/:id" element={<MarketplaceDetail />} />
-              <Route path="/orders" element={<MyOrders />} />
-              <Route path="/orders/:id" element={<OrderDetail />} />
-              <Route path="/wallet" element={<Wallet />} />
-              <Route path="/my-listings" element={<MyListings />} />
-              <Route path="/messages" element={<Messages />} />
-              <Route path="/connections" element={<Connections />} />
-              <Route path="/org/verification" element={<OrgProvider><OrgVerification /></OrgProvider>} />
-              <Route path="/video-call/:roomId" element={<VideoRoom />} />
-              <Route path="/disputes" element={<Disputes />} />
-              <Route path="/disputes/:id" element={<DisputeDetail />} />
-              <Route path="/admin" element={<AdminRedirect />} />
-              <Route path="/b2b/setup" element={<OrgProvider><OrgSetup /></OrgProvider>} />
-              <Route path="/b2b/invite/accept" element={<InviteAccept />} />
-              <Route path="/b2b" element={
-                <OrgProvider>
-                  <OrgSubnav />
-                  <div className="pt-16 pb-12 px-4 lg:px-8">
-                    <div className="mx-auto max-w-6xl">
-                      <Outlet />
-                    </div>
-                  </div>
-                </OrgProvider>
-              }>
-                <Route index element={<B2BDashboard />} />
-                <Route path="team" element={<TeamList />} />
-                <Route path="talent" element={<TalentSearch />} />
-                <Route path="talent/lists" element={<TalentListManager />} />
-                <Route path="hiring" element={<BulkJobPost />} />
-                <Route path="hiring/pipeline" element={<PipelineView />} />
-                <Route path="contracts" element={<ContractList />} />
-                <Route path="compliance" element={<ComplianceDashboard />} />
-                <Route path="analytics" element={<AnalyticsDashboard />} />
-                <Route path="meetings" element={<MeetingsPage />} />
-                <Route path="settings" element={<SettingsPage />} />
-              </Route>
-            </Routes>
-          </main>
-          <Footer />
-          <Toaster />
-        </div>
+        <SocketProvider>
+          <CallProvider>
+            <MetaUpdater />
+            <div className="min-h-screen bg-background text-foreground selection:bg-secondary/30 selection:text-primary">
+              <Navbar />
+              <main>
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/jobs" element={<Jobs />} />
+                  <Route path="/talent" element={<Talent />} />
+                  <Route path="/talent/:id" element={<Profile />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/projects" element={<Projects />} />
+                  <Route path="/projects/:id" element={<ProjectDetail />} />
+                  <Route path="/projects/:id/collaboration" element={<ProjectCollaboration />} />
+                  <Route path="/my-applications" element={<MyApplications />} />
+                  <Route path="/academy" element={
+                    <>
+                      <AcademySubnav />
+                      <div className="pt-16 pb-12 px-4 lg:px-8">
+                        <div className="mx-auto max-w-7xl">
+                          <Outlet />
+                        </div>
+                      </div>
+                    </>
+                  }>
+                    <Route index element={<AcademyDashboard />} />
+                    <Route path="browse" element={<Academy />} />
+                    <Route path="create" element={<CreateCourse />} />
+                    <Route path="apply" element={<TutorApply />} />
+                    <Route path="ai-tutor" element={<Tutor compact basePath="/academy/ai-tutor" />} />
+                    <Route path="ai-tutor/:id" element={<TutorChat />} />
+                    <Route path="playground" element={<Playground />} />
+                    <Route path="my-courses" element={<MyCourses />} />
+                    <Route path="learn/:courseId" element={<CourseLearn />} />
+                    <Route path=":slug" element={<CourseDetail />} />
+                  </Route>
+                  <Route path="/tutor" element={<Tutor />} />
+                  <Route path="/tutor/:id" element={<TutorChat />} />
+                  <Route path="/my-courses" element={<Navigate to="/academy/my-courses" replace />} />
+                  <Route path="/tutor-dashboard" element={<MyTutorProfile />} />
+                  <Route path="/dashboard" element={<UserDashboard />} />
+                  <Route path="/dashboard/org" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/jobs/new" element={<PostJob />} />
+                  <Route path="/marketplace" element={<Marketplace />} />
+                  <Route path="/marketplace/new" element={<CreateListing />} />
+                  <Route path="/marketplace/:id" element={<MarketplaceDetail />} />
+                  <Route path="/orders" element={<MyOrders />} />
+                  <Route path="/orders/:id" element={<OrderDetail />} />
+                  <Route path="/wallet" element={<Wallet />} />
+                  <Route path="/my-listings" element={<MyListings />} />
+                  <Route path="/messages" element={<Messages />} />
+                  <Route path="/connections" element={<Connections />} />
+                  <Route path="/org/verification" element={<OrgProvider><OrgVerification /></OrgProvider>} />
+                  <Route path="/video-call/:roomId" element={<VideoRoom />} />
+                  <Route path="/disputes" element={<Disputes />} />
+                  <Route path="/disputes/:id" element={<DisputeDetail />} />
+                  <Route path="/admin" element={<AdminRedirect />} />
+                  <Route path="/b2b/setup" element={<OrgProvider><OrgSetup /></OrgProvider>} />
+                  <Route path="/b2b/invite/accept" element={<InviteAccept />} />
+                  <Route path="/b2b" element={
+                    <OrgProvider>
+                      <OrgSubnav />
+                      <div className="pt-16 pb-12 px-4 lg:px-8">
+                        <div className="mx-auto max-w-6xl">
+                          <Outlet />
+                        </div>
+                      </div>
+                    </OrgProvider>
+                  }>
+                    <Route index element={<B2BDashboard />} />
+                    <Route path="team" element={<TeamList />} />
+                    <Route path="talent" element={<TalentSearch />} />
+                    <Route path="talent/lists" element={<TalentListManager />} />
+                    <Route path="hiring" element={<BulkJobPost />} />
+                    <Route path="hiring/pipeline" element={<PipelineView />} />
+                    <Route path="contracts" element={<ContractList />} />
+                    <Route path="compliance" element={<ComplianceDashboard />} />
+                    <Route path="analytics" element={<AnalyticsDashboard />} />
+                    <Route path="meetings" element={<MeetingsPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                  </Route>
+                </Routes>
+              </main>
+              <Footer />
+              <Toaster />
+              <IncomingCallDialog />
+              <OutgoingCallStatus />
+            </div>
+          </CallProvider>
+        </SocketProvider>
       </Router>
     </AuthProvider>
   );

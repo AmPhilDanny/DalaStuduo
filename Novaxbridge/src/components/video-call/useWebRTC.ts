@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
+import { supabase } from "@/integrations/supabase/client";
 
 // Derive Socket.IO server URL from the API URL (strip /api suffix so Socket.IO connects to root)
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4001";
@@ -72,99 +73,110 @@ export function useWebRTC(roomId: string, displayName: string): UseWebRTCReturn 
   // Connect to signaling server
   useEffect(() => {
     if (!roomId || !displayName) return;
+    let cancelled = false;
 
-    const socket = io(SIGNALING_SERVER, {
-      transports: ["websocket", "polling"],
-    });
-    socketRef.current = socket;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      const token = session?.access_token || "";
 
-    const peer: PeerInfo = { id: socket.id || crypto.randomUUID(), displayName };
+      const socket = io(SIGNALING_SERVER, {
+        transports: ["websocket", "polling"],
+        auth: { token },
+      });
+      socketRef.current = socket;
 
-    socket.on("connect", () => {
-      peer.id = socket.id || peer.id;
-      socket.emit("room:join", { roomId, peer }, (ack: any) => {
-        if (!ack.success) {
-          console.error("Failed to join room:", ack.error);
+      const peer: PeerInfo = { id: socket.id || crypto.randomUUID(), displayName };
+
+      socket.on("connect", () => {
+        peer.id = socket.id || peer.id;
+        socket.emit("room:join", { roomId, peer }, (ack: any) => {
+          if (!ack.success) {
+            console.error("Failed to join room:", ack.error);
+          }
+        });
+      });
+
+      socket.on("room:joined", (data: any) => {
+        const remoteList: PeerConnection[] = data.peers
+          .filter((p: PeerInfo) => p.id !== peer.id)
+          .map((p: PeerInfo) => ({
+            peerId: p.id,
+            displayName: p.displayName,
+            connectionState: "connecting" as ConnectionState,
+          }));
+        setRemotePeers(remoteList);
+        setConnectionState("connected");
+      });
+
+      socket.on("room:peer-joined", (data: any) => {
+        const newPeer = data.peer as PeerInfo;
+        setRemotePeers((prev) => {
+          if (prev.some((p) => p.peerId === newPeer.id)) return prev;
+          return [
+            ...prev,
+            { peerId: newPeer.id, displayName: newPeer.displayName, connectionState: "connecting" as ConnectionState },
+          ];
+        });
+        createPeerConnection(newPeer.id, true, socket, peer.id, roomId);
+      });
+
+      socket.on("room:peer-left", (data: any) => {
+        const peerId = data.peerId as string;
+        closePeerConnection(peerId);
+        setRemotePeers((prev) => prev.filter((p) => p.peerId !== peerId));
+      });
+
+      socket.on("signal:offer", (data: any) => {
+        createPeerConnection(data.from, false, socket, peer.id, roomId).then((pc) => {
+          pc.setRemoteDescription(new RTCSessionDescription(data.offer as RTCSessionDescriptionInit))
+            .then(() => pc.createAnswer())
+            .then((answer) => pc.setLocalDescription(answer))
+            .then(() => {
+              socket.emit("signal:answer", { roomId, to: data.from, answer: pc.localDescription });
+              const cands = pendingCandidates.current.get(data.from) || [];
+              cands.forEach((c) => pc.addIceCandidate(new RTCIceCandidate(c)));
+              pendingCandidates.current.delete(data.from);
+            })
+            .catch((err) => console.error("Error handling offer:", err));
+        });
+      });
+
+      socket.on("signal:answer", (data: any) => {
+        const pc = pcRefs.current.get(data.from);
+        if (pc) {
+          pc.setRemoteDescription(new RTCSessionDescription(data.answer as RTCSessionDescriptionInit))
+            .catch((err) => console.error("Error setting remote answer:", err));
         }
       });
-    });
 
-    socket.on("room:joined", (data: any) => {
-      const remoteList: PeerConnection[] = data.peers
-        .filter((p: PeerInfo) => p.id !== peer.id)
-        .map((p: PeerInfo) => ({
-          peerId: p.id,
-          displayName: p.displayName,
-          connectionState: "connecting" as ConnectionState,
-        }));
-      setRemotePeers(remoteList);
-      setConnectionState("connected");
-    });
-
-    socket.on("room:peer-joined", (data: any) => {
-      const newPeer = data.peer as PeerInfo;
-      setRemotePeers((prev) => {
-        if (prev.some((p) => p.peerId === newPeer.id)) return prev;
-        return [
-          ...prev,
-          { peerId: newPeer.id, displayName: newPeer.displayName, connectionState: "connecting" as ConnectionState },
-        ];
+      socket.on("signal:ice-candidate", (data: any) => {
+        const pc = pcRefs.current.get(data.from);
+        if (pc && pc.remoteDescription) {
+          pc.addIceCandidate(new RTCIceCandidate(data.candidate as RTCIceCandidateInit))
+            .catch((err) => console.error("Error adding ICE candidate:", err));
+        } else {
+          const cands = pendingCandidates.current.get(data.from) || [];
+          cands.push(data.candidate as RTCIceCandidateInit);
+          pendingCandidates.current.set(data.from, cands);
+        }
       });
-      createPeerConnection(newPeer.id, true, socket, peer.id, roomId);
-    });
 
-    socket.on("room:peer-left", (data: any) => {
-      const peerId = data.peerId as string;
-      closePeerConnection(peerId);
-      setRemotePeers((prev) => prev.filter((p) => p.peerId !== peerId));
-    });
-
-    socket.on("signal:offer", (data: any) => {
-      createPeerConnection(data.from, false, socket, peer.id, roomId).then((pc) => {
-        pc.setRemoteDescription(new RTCSessionDescription(data.offer as RTCSessionDescriptionInit))
-          .then(() => pc.createAnswer())
-          .then((answer) => pc.setLocalDescription(answer))
-          .then(() => {
-            socket.emit("signal:answer", { roomId, to: data.from, answer: pc.localDescription });
-            const cands = pendingCandidates.current.get(data.from) || [];
-            cands.forEach((c) => pc.addIceCandidate(new RTCIceCandidate(c)));
-            pendingCandidates.current.delete(data.from);
-          })
-          .catch((err) => console.error("Error handling offer:", err));
+      socket.on("room:force-ended", (data: any) => {
+        endCall();
       });
-    });
 
-    socket.on("signal:answer", (data: any) => {
-      const pc = pcRefs.current.get(data.from);
-      if (pc) {
-        pc.setRemoteDescription(new RTCSessionDescription(data.answer as RTCSessionDescriptionInit))
-          .catch((err) => console.error("Error setting remote answer:", err));
-      }
-    });
-
-    socket.on("signal:ice-candidate", (data: any) => {
-      const pc = pcRefs.current.get(data.from);
-      if (pc && pc.remoteDescription) {
-        pc.addIceCandidate(new RTCIceCandidate(data.candidate as RTCIceCandidateInit))
-          .catch((err) => console.error("Error adding ICE candidate:", err));
-      } else {
-        const cands = pendingCandidates.current.get(data.from) || [];
-        cands.push(data.candidate as RTCIceCandidateInit);
-        pendingCandidates.current.set(data.from, cands);
-      }
-    });
-
-    socket.on("room:force-ended", (data: any) => {
-      endCall();
-    });
-
-    socket.on("disconnect", () => {
-      setConnectionState("disconnected");
+      socket.on("disconnect", () => {
+        setConnectionState("disconnected");
+      });
     });
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      cancelled = true;
+      if (socketRef.current) {
+        socketRef.current.emit("room:leave", { roomId });
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
   }, [roomId, displayName]);
 

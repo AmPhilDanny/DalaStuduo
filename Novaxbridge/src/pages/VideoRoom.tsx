@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useWebRTC } from "@/components/video-call/useWebRTC";
 import { VideoPlayer } from "@/components/video-call/VideoPlayer";
 import { MeetingControls } from "@/components/video-call/MeetingControls";
@@ -11,8 +11,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 export default function VideoRoom() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
-  const [displayName, setDisplayName] = useState("");
-  const [showLobby, setShowLobby] = useState(true);
+  const location = useLocation();
+  const [displayName, setDisplayName] = useState((location.state as any)?.displayName || "");
+  const [showLobby, setShowLobby] = useState(!((location.state as any)?.displayName));
 
   const {
     localStream,
