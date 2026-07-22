@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 
 interface ChatBoxProps {
   conversationId: string;
+  otherUserId?: string;
   otherUserName: string;
   otherUserAvatar: string | null;
   onBack?: () => void;
@@ -99,7 +100,7 @@ function AttachmentBubble({ attachment }: { attachment: MessageAttachment }) {
   );
 }
 
-export default function ChatBox({ conversationId, otherUserName, otherUserAvatar, onBack }: ChatBoxProps) {
+export default function ChatBox({ conversationId, otherUserId, otherUserName, otherUserAvatar, onBack }: ChatBoxProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -255,7 +256,7 @@ export default function ChatBox({ conversationId, otherUserName, otherUserAvatar
           <AvatarFallback>{(otherUserName || '?').charAt(0)}</AvatarFallback>
         </Avatar>
         <span className="font-semibold text-sm truncate flex-1">{otherUserName}</span>
-        <VideoCallWidget conversationId={conversationId} userName={user?.user_metadata?.full_name || user?.email || 'User'} compact />
+        <VideoCallWidget conversationId={conversationId} otherUserId={otherUserId} otherUserName={otherUserName} userName={user?.user_metadata?.full_name || user?.email || 'User'} compact />
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useCall } from '@/hooks/useCall';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,7 +25,6 @@ import { Database } from '@/integrations/supabase/types';
 import { getProviderStats, getProviderReviews, formatPrice, ProviderStats, ProviderReview, getConnectionStatus, sendConnectionRequest, acceptConnectionRequest, rejectConnectionRequest } from '@/lib/marketplace';
 import AvailabilityCalendar from '@/components/provider/AvailabilityCalendar';
 import AvailabilityManager from '@/components/provider/AvailabilityManager';
-import CustomVideoCall from '@/components/messaging/CustomVideoCall';
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 type PortfolioItem = Database['public']['Tables']['portfolio_items']['Row'];
@@ -39,6 +39,7 @@ const AVAILABILITY_OPTIONS = [
 export default function Profile() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { startCall } = useCall();
   const navigate = useNavigate();
   const targetId = id || user?.id;
   const isOwnProfile = !!user && targetId === user.id;
@@ -55,7 +56,6 @@ export default function Profile() {
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [activeTab, setActiveTab] = useState<'portfolio' | 'reviews' | 'availability'>('portfolio');
   const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
-  const [videoCallOpen, setVideoCallOpen] = useState(false);
 
   const [editProject, setEditProject] = useState<ProjectRow | null>(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', collaboration_type: 'free', project_status: 'beginning', github_url: '', deployment_url: '' });
@@ -331,7 +331,7 @@ export default function Profile() {
                   </div>
                   {!isOwnProfile && user && (
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setVideoCallOpen(true)} className="gap-1.5" title="Start video call">
+                      <Button size="sm" variant="outline" onClick={() => startCall(targetId!, profile?.full_name || 'User', profile?.avatar_url || undefined)} className="gap-1.5" title="Start video call">
                         <Video className="w-4 h-4 text-secondary" />
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => navigate(`/messages?userId=${targetId}`)} className="gap-1.5">
@@ -826,16 +826,6 @@ export default function Profile() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        {/* Video call dialog */}
-        {videoCallOpen && (
-          <CustomVideoCall
-            open={videoCallOpen}
-            onOpenChange={setVideoCallOpen}
-            roomName={`dala-profile-${user?.id}-${targetId}`}
-            userName={user?.user_metadata?.full_name || user?.email || 'User'}
-          />
-        )}
 
         {/* Disconnect confirmation dialog */}
         <Dialog open={disconnectDialogOpen} onOpenChange={setDisconnectDialogOpen}>

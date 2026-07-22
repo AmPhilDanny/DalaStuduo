@@ -15,7 +15,7 @@ export default function Messages() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null);
-  const [otherProfile, setOtherProfile] = useState<{ name: string; avatar: string | null } | null>(null);
+  const [otherProfile, setOtherProfile] = useState<{ id?: string; name: string; avatar: string | null } | null>(null);
   const [creating, setCreating] = useState(false);
   const [newMsgOpen, setNewMsgOpen] = useState(false);
 
@@ -39,7 +39,7 @@ export default function Messages() {
   useEffect(() => {
     if (selectedConv?.other_profiles?.[0]) {
       const p = selectedConv.other_profiles[0];
-      setOtherProfile({ name: p.full_name || 'Unknown', avatar: p.avatar_url });
+      setOtherProfile({ id: p.id, name: p.full_name || 'Unknown', avatar: p.avatar_url });
     }
   }, [selectedConv]);
 
@@ -76,6 +76,7 @@ export default function Messages() {
               {selectedConv ? (
                 <ChatBox
                   conversationId={selectedConv.id}
+                  otherUserId={otherProfile?.id}
                   otherUserName={otherProfile?.name || 'Unknown'}
                   otherUserAvatar={otherProfile?.avatar || null}
                   onBack={() => setSelectedConv(null)}
@@ -93,6 +94,7 @@ export default function Messages() {
               {selectedConv ? (
                 <ChatBox
                   conversationId={selectedConv.id}
+                  otherUserId={otherProfile?.id}
                   otherUserName={otherProfile?.name || 'Unknown'}
                   otherUserAvatar={otherProfile?.avatar || null}
                 />
