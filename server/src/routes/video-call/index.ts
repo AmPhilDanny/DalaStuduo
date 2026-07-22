@@ -35,6 +35,7 @@ interface PendingCall {
 
 interface SocketData {
   userId?: string;
+  peer?: PeerInfo;
 }
 
 interface ClientToServerEvents {
@@ -88,7 +89,7 @@ function createRoom(roomId: string): Room {
 }
 
 function removePeerFromAllRooms(socket: Socket<ClientToServerEvents, ServerToClientEvents, any, SocketData>) {
-  const peerInfo = socket.data.peer as PeerInfo | undefined;
+  const peerInfo = socket.data.peer;
   if (!peerInfo) return;
 
   for (const [roomId, room] of rooms) {
@@ -279,7 +280,7 @@ export function setupVideoCallSignaling(
     });
 
     socket.on('room:leave', ({ roomId }) => {
-      const peerInfo = socket.data.peer as PeerInfo | undefined;
+      const peerInfo = socket.data.peer;
       if (!peerInfo) return;
 
       const room = getRoom(roomId);

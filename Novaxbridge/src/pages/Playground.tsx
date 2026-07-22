@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { githubApi, playgroundApi } from '@/lib/api-client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,8 +13,6 @@ import {
 } from '@/components/ui/dialog';
 import { Loader2, Github, Plus, ExternalLink, Code, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'https://dalastudioshowcase.onrender.com/api';
 
 interface Workspace {
   id: string;
@@ -36,22 +34,6 @@ interface GitHubConnection {
   github_url: string;
 }
 
-async function apiCall(path: string, options?: { method?: string; body?: unknown }) {
-  const { data: session } = await supabase.auth.getSession();
-  const token = session?.access_token;
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: options?.method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: options?.body ? JSON.stringify(options.body) : undefined,
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Request failed');
-  return json;
-}
-
 function relativeTime(dateStr: string | null): string {
   if (!dateStr) return 'Not opened yet';
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -70,6 +52,8 @@ function makeEditorUrl(repoUrl: string): string {
 }
 
 export default function Playground() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
@@ -87,7 +71,7 @@ export default function Playground() {
 
   const checkConnection = async () => {
     try {
-      const { data } = await apiCall('/github/connection');
+      const { data } = await githubApi.getConnection();
       if (data) {
         setGithubConnected(true);
         setGhConnection(data);
@@ -101,7 +85,7 @@ export default function Playground() {
 
   const fetchWorkspaces = async () => {
     try {
-      const { data } = await apiCall('/academy/playground/workspaces');
+      const { data } = await playgroundApi.list();
       setWorkspaces(data || []);
     } catch (err: any) {
       toast.error(err.message || 'Failed to load workspaces');
@@ -128,7 +112,7 @@ export default function Playground() {
 
   const handleConnect = async () => {
     try {
-      const { data } = await apiCall('/github/url');
+      const { data } = await githubApi.getUrl();
       if (data?.url) {
         window.location.href = data.url;
       }
@@ -145,13 +129,10 @@ export default function Playground() {
 
     setCreating(true);
     try {
-      const { data } = await apiCall('/academy/playground/workspaces', {
-        method: 'POST',
-        body: {
-          name: workspaceName.trim(),
-          course_id: prefillCourseId,
-          lesson_id: prefillLessonId,
-        },
+      const { data } = await playgroundApi.create({
+        name: workspaceName.trim(),
+        course_id: prefillCourseId,
+        lesson_id: prefillLessonId,
       });
 
       setDialogOpen(false);
@@ -174,14 +155,14 @@ export default function Playground() {
 
   const handleOpenWorkspace = async (workspace: Workspace) => {
     // Fire-and-forget update last_opened_at
-    apiCall(`/academy/playground/workspaces/${workspace.id}/opened`, { method: 'PATCH' }).catch(() => {});
+    playgroundApi.updateOpened(workspace.id).catch(() => {});
 
     window.open(workspace.github_repo_url, '_blank');
   };
 
   const handleOpenEditor = async (workspace: Workspace) => {
     // Fire-and-forget update last_opened_at
-    apiCall(`/academy/playground/workspaces/${workspace.id}/opened`, { method: 'PATCH' }).catch(() => {});
+    playgroundApi.updateOpened(workspace.id).catch(() => {});
 
     window.open(makeEditorUrl(workspace.github_repo_url), '_blank');
   };
