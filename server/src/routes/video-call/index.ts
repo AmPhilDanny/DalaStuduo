@@ -24,12 +24,31 @@ interface Room {
   peers: Map<string, PeerInfo>;
 }
 
+interface PendingCall {
+  callerUserId: string;
+  calleeUserId: string;
+  callerSocketIds: Set<string>;
+  calleeSocketIds: Set<string>;
+  callerInfo: { displayName: string; avatar_url?: string };
+  roomId: string;
+}
+
+interface SocketData {
+  userId?: string;
+}
+
 interface ClientToServerEvents {
   'room:join': (data: { roomId: string; peer: PeerInfo }, callback: (ack: { success: boolean; error?: string }) => void) => void;
   'room:leave': (data: { roomId: string }) => void;
   'signal:offer': (data: { roomId: string; to: string; offer: unknown }) => void;
   'signal:answer': (data: { roomId: string; to: string; answer: unknown }) => void;
   'signal:ice-candidate': (data: { roomId: string; to: string; candidate: unknown }) => void;
+  // Call signaling
+  'call:outgoing': (data: { to: string; roomId: string; callerInfo: { displayName: string; avatar_url?: string } }) => void;
+  'call:accept': (data: { roomId: string }) => void;
+  'call:reject': (data: { roomId: string }) => void;
+  'call:end': (data: { roomId: string }) => void;
+  'call:cancel': (data: { roomId: string }) => void;
 }
 
 interface ServerToClientEvents {
@@ -41,11 +60,22 @@ interface ServerToClientEvents {
   'signal:ice-candidate': (data: { from: string; candidate: unknown }) => void;
   'room:error': (data: { message: string }) => void;
   'room:force-ended': (data: { reason: string }) => void;
+  // Call signaling
+  'call:incoming': (data: { from: { id: string; displayName: string; avatar_url?: string }; roomId: string }) => void;
+  'call:accepted': (data: { roomId: string }) => void;
+  'call:rejected': (data: { roomId: string }) => void;
+  'call:ended': (data: { roomId: string; by: string }) => void;
+  'call:cancelled': (data: { roomId: string }) => void;
+  'call:unavailable': (data: { roomId: string }) => void;
 }
 
-// ── In-memory room store ──
+// ── In-memory stores ──
 
 const rooms = new Map<string, Room>();
+/** userId → Set of socketIds (supports multi-device) */
+const userSockets = new Map<string, Set<string>>();
+/** roomId → PendingCall details for active call invitations */
+const pendingCalls = new Map<string, PendingCall>();
 
 function getRoom(roomId: string): Room | undefined {
   return rooms.get(roomId);
@@ -57,7 +87,7 @@ function createRoom(roomId: string): Room {
   return room;
 }
 
-function removePeerFromAllRooms(socket: Socket<ClientToServerEvents, ServerToClientEvents>) {
+function removePeerFromAllRooms(socket: Socket<ClientToServerEvents, ServerToClientEvents, any, SocketData>) {
   const peerInfo = socket.data.peer as PeerInfo | undefined;
   if (!peerInfo) return;
 
@@ -73,12 +103,10 @@ function removePeerFromAllRooms(socket: Socket<ClientToServerEvents, ServerToCli
   }
 }
 
-function forceEndRoom(roomId: string, io: Server, reason: string) {
+function forceEndRoom(roomId: string, io: Server<ClientToServerEvents, ServerToClientEvents, any, SocketData>, reason: string) {
   const room = rooms.get(roomId);
   if (!room) return;
-  // Emit force-ended to all sockets in the room
   io.to(roomId).emit('room:force-ended', { reason });
-  // Disconnect each socket from the room
   const sockets = io.sockets.adapter.rooms.get(roomId);
   if (sockets) {
     for (const socketId of sockets) {
@@ -89,6 +117,62 @@ function forceEndRoom(roomId: string, io: Server, reason: string) {
     }
   }
   rooms.delete(roomId);
+}
+
+/** Register a user's socket for presence / call routing */
+function registerUserSocket(userId: string, socketId: string) {
+  let sockets = userSockets.get(userId);
+  if (!sockets) {
+    sockets = new Set();
+    userSockets.set(userId, sockets);
+  }
+  sockets.add(socketId);
+}
+
+/** Unregister a user's socket on disconnect */
+function unregisterUserSocket(userId: string, socketId: string) {
+  const sockets = userSockets.get(userId);
+  if (!sockets) return;
+  sockets.delete(socketId);
+  if (sockets.size === 0) userSockets.delete(userId);
+}
+
+/** Check if a user has any active socket connections */
+function isUserOnline(userId: string): boolean {
+  const sockets = userSockets.get(userId);
+  return !!sockets && sockets.size > 0;
+}
+
+/** Get all socket IDs for a user */
+function getUserSocketIds(userId: string): string[] {
+  const sockets = userSockets.get(userId);
+  return sockets ? Array.from(sockets) : [];
+}
+
+/** Clean up pending calls involving a user (when they disconnect) */
+function cleanupPendingCallsForUser(userId: string, socketId: string, io: Server<ClientToServerEvents, ServerToClientEvents, any, SocketData>) {
+  for (const [roomId, call] of pendingCalls) {
+    // If disconnecting socket was the caller
+    if (call.callerSocketIds.has(socketId)) {
+      call.callerSocketIds.delete(socketId);
+      // Notify callee that call was cancelled
+      for (const sid of call.calleeSocketIds) {
+        io.to(sid).emit('call:cancelled', { roomId });
+      }
+      pendingCalls.delete(roomId);
+      return;
+    }
+    // If disconnecting socket was the callee
+    if (call.calleeSocketIds.has(socketId)) {
+      call.calleeSocketIds.delete(socketId);
+      // Notify caller that callee is gone
+      for (const sid of call.callerSocketIds) {
+        io.to(sid).emit('call:cancelled', { roomId });
+      }
+      pendingCalls.delete(roomId);
+      return;
+    }
+  }
 }
 
 // ── Express Router (admin endpoints) ──
@@ -144,17 +228,33 @@ videoCallRouter.post('/admin/rooms/:roomId/end', (req: Request, res: Response) =
 // ── Socket.IO Signaling Setup ──
 
 export function setupVideoCallSignaling(
-  io: Server<ClientToServerEvents, ServerToClientEvents>,
+  io: Server<ClientToServerEvents, ServerToClientEvents, any, SocketData>,
 ): void {
   // Store io reference on the router for admin endpoints
   (videoCallRouter as any).__io = io;
 
-  io.on('connection', (socket: Socket<ClientToServerEvents, ServerToClientEvents>) => {
+  // ── Auth Middleware ──
+  io.use(async (socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('Authentication required'));
+    try {
+      const { data: { user }, error } = await adminClient.auth.getUser(token);
+      if (error || !user) return next(new Error('Invalid token'));
+      socket.data.userId = user.id;
+      next();
+    } catch {
+      next(new Error('Authentication failed'));
+    }
+  });
+
+  io.on('connection', (socket: Socket<ClientToServerEvents, ServerToClientEvents, any, SocketData>) => {
+    const userId = socket.data.userId!;
+    registerUserSocket(userId, socket.id);
+
+    // ── Room Signaling ──
+
     socket.on('room:join', ({ roomId, peer }, callback) => {
       try {
-        // Check if room is force-ended
-        const roomExists = rooms.has(roomId);
-
         let room = getRoom(roomId);
         if (!room) {
           room = createRoom(roomId);
@@ -206,8 +306,107 @@ export function setupVideoCallSignaling(
       socket.to(to).emit('signal:ice-candidate', { from: socket.id, candidate });
     });
 
+    // ── Call Signaling ──
+
+    socket.on('call:outgoing', async ({ to, roomId, callerInfo }) => {
+      const callerUserId = socket.data.userId;
+      if (!callerUserId || !to || !roomId) return;
+
+      // Don't allow calling yourself
+      if (callerUserId === to) return;
+
+      // Check if room already exists (call already in progress for this room)
+      if (pendingCalls.has(roomId)) {
+        return;
+      }
+
+      const calleeSocketIds = getUserSocketIds(to);
+
+      if (calleeSocketIds.length > 0) {
+        // Callee is online — establish pending call
+        pendingCalls.set(roomId, {
+          callerUserId,
+          calleeUserId: to,
+          callerSocketIds: new Set([socket.id]),
+          calleeSocketIds: new Set(calleeSocketIds),
+          callerInfo,
+          roomId,
+        });
+
+        // Notify all callee devices
+        for (const sid of calleeSocketIds) {
+          io.to(sid).emit('call:incoming', {
+            from: { id: callerUserId, displayName: callerInfo.displayName, avatar_url: callerInfo.avatar_url },
+            roomId,
+          });
+        }
+      } else {
+        // Callee is offline — create in-app notification
+        try {
+          await adminClient.from('notifications').insert({
+            profile_id: to,
+            title: 'Missed Call',
+            message: `${callerInfo.displayName} called you`,
+            type: 'video_call',
+            reference_type: 'video_call',
+            reference_id: roomId,
+          });
+        } catch {
+          // Notification creation is best-effort
+        }
+        socket.emit('call:unavailable', { roomId } as any);
+      }
+    });
+
+    socket.on('call:accept', ({ roomId }) => {
+      const pending = pendingCalls.get(roomId);
+      if (!pending) return;
+
+      // Only the intended callee can accept
+      if (socket.data.userId !== pending.calleeUserId) return;
+
+      pendingCalls.delete(roomId);
+
+      // Notify all caller sockets
+      for (const sid of pending.callerSocketIds) {
+        io.to(sid).emit('call:accepted', { roomId });
+      }
+    });
+
+    socket.on('call:reject', ({ roomId }) => {
+      const pending = pendingCalls.get(roomId);
+      if (!pending) return;
+
+      if (socket.data.userId !== pending.calleeUserId) return;
+
+      pendingCalls.delete(roomId);
+
+      for (const sid of pending.callerSocketIds) {
+        io.to(sid).emit('call:rejected', { roomId });
+      }
+    });
+
+    socket.on('call:cancel', ({ roomId }) => {
+      const pending = pendingCalls.get(roomId);
+      if (!pending) return;
+
+      if (socket.data.userId !== pending.callerUserId) return;
+
+      pendingCalls.delete(roomId);
+
+      for (const sid of pending.calleeSocketIds) {
+        io.to(sid).emit('call:cancelled', { roomId });
+      }
+    });
+
+    socket.on('call:end', ({ roomId }) => {
+      socket.to(roomId).emit('call:ended', { roomId, by: socket.data.userId || 'unknown' });
+    });
+
     socket.on('disconnect', () => {
       removePeerFromAllRooms(socket);
+      cleanupPendingCallsForUser(userId, socket.id, io);
+      unregisterUserSocket(userId, socket.id);
     });
   });
 }
