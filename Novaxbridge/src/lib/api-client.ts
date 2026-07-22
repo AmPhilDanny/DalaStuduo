@@ -223,6 +223,14 @@ export const notificationsApi = {
   markRead: (id: string) => patch(`/notifications/${id}/read`),
 };
 
+// ── Academy Playground API helpers ──
+
+export const playgroundApi = {
+  list: () => get<any[]>('/academy/playground/workspaces'),
+  create: (data: { name: string; course_id?: string; lesson_id?: string }) => post<any>('/academy/playground/workspaces', data),
+  updateOpened: (id: string) => patch(`/academy/playground/workspaces/${id}/opened`),
+};
+
 // ── AI API helpers ──
 
 export const aiApi = {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Rocket, LogOut, User, Bell, Package, Wallet as WalletIcon, Store, Shield, ChevronDown, LayoutDashboard, Settings, Users, MessageSquare, Building2, CreditCard, GraduationCap, BookOpen, Plus, BookOpenCheck, Sparkles } from 'lucide-react';
+import { Menu, X, Rocket, LogOut, User, Bell, Package, Wallet as WalletIcon, Store, Shield, ChevronDown, LayoutDashboard, Settings, Users, MessageSquare, Building2, CreditCard, GraduationCap, BookOpen, Plus, BookOpenCheck, Sparkles, Code } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -186,6 +186,14 @@ export function Navbar() {
                       >
                         <Sparkles className="w-4 h-4 text-secondary" />
                         AI Tutor
+                      </Link>
+                      <Link
+                        to="/academy/playground"
+                        onClick={() => setAcademyOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-foreground hover:bg-muted/50 transition-colors"
+                      >
+                        <Code className="w-4 h-4 text-secondary" />
+                        Playground
                       </Link>
                       <div className="my-1 border-t border-border" />
                       {isTutorOrAdmin && (
@@ -472,6 +480,9 @@ export function Navbar() {
                         </Link>
                         <Link to="/academy/ai-tutor" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
                           <Sparkles className="w-3.5 h-3.5" /> AI Tutor
+                        </Link>
+                        <Link to="/academy/playground" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                          <Code className="w-3.5 h-3.5" /> Playground
                         </Link>
                         {isTutorOrAdmin && (
                           <Link to="/tutor-dashboard" onClick={() => { setMobileAcademyOpen(false); setIsMobileMenuOpen(false); }} className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-primary py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">

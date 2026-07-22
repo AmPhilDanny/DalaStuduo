@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, BookOpen, Play, FileText, Video, CheckCircle2, Clock, ArrowLeft, Menu as MenuIcon, X, ChevronLeft, ChevronRight, Brain } from 'lucide-react';
+import { Loader2, BookOpen, Play, FileText, Video, CheckCircle2, Clock, ArrowLeft, Menu as MenuIcon, X, ChevronLeft, ChevronRight, Brain, Code } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Lesson {
@@ -346,6 +346,17 @@ export default function CourseLearn() {
               )}
               {spawningTutor ? 'Starting...' : 'Ask AI Tutor about this lesson'}
             </Button>
+          </div>
+
+          {/* Practice in Playground */}
+          <div className="flex justify-center mt-3">
+            <Link
+              to={`/academy/playground?course_id=${course.id}&lesson_id=${selectedLesson.id}`}
+              className="text-xs text-muted-foreground hover:text-secondary flex items-center gap-1.5 transition-colors"
+            >
+              <Code className="w-3.5 h-3.5" />
+              Practice this in the Playground →
+            </Link>
           </div>
 
           {/* Complete button */}

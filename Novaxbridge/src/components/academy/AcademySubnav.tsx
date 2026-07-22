@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { GraduationCap, BookOpen, LayoutDashboard, MessageSquare, Users, Plus, BookOpenCheck } from 'lucide-react';
+import { GraduationCap, BookOpen, LayoutDashboard, MessageSquare, Users, Plus, BookOpenCheck, Code } from 'lucide-react';
 
 const academyNavItems = [
   { to: '/academy', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/academy/browse', label: 'Browse Courses', icon: BookOpen },
   { to: '/academy/my-courses', label: 'My Courses', icon: GraduationCap },
+  { to: '/academy/playground', label: 'Playground', icon: Code },
   { to: '/academy/ai-tutor', label: 'AI Tutor', icon: MessageSquare },
   { to: '/tutor-dashboard', label: 'Tutor Dashboard', icon: BookOpenCheck },
   { to: '/academy/apply', label: 'Become a Tutor', icon: Users },

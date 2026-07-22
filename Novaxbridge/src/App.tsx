@@ -24,6 +24,7 @@ import CourseLearn from "@/pages/CourseLearn";
 import CreateCourse from "@/pages/CreateCourse";
 import MyTutorProfile from "@/pages/MyTutorProfile";
 import MyCourses from "@/pages/MyCourses";
+import Playground from "@/pages/Playground";
 import TutorApply from "@/pages/TutorApply";
 import UserDashboard from "@/pages/UserDashboard";
 import PostJob from "@/pages/PostJob";
@@ -133,6 +134,7 @@ function App() {
                 <Route path="apply" element={<TutorApply />} />
                 <Route path="ai-tutor" element={<Tutor compact basePath="/academy/ai-tutor" />} />
                 <Route path="ai-tutor/:id" element={<TutorChat />} />
+                <Route path="playground" element={<Playground />} />
                 <Route path="my-courses" element={<MyCourses />} />
                 <Route path="learn/:courseId" element={<CourseLearn />} />
                 <Route path=":slug" element={<CourseDetail />} />
