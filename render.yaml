@@ -4,8 +4,8 @@ services:
     name: skillbridge-api
     runtime: node
     rootDir: server
-    buildCommand: npm install
-    startCommand: npx tsx src/index.ts
+    buildCommand: NODE_OPTIONS="--max-old-space-size=4096" npm install && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "echo 'Build skipped — running via tsx'",
+    "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
