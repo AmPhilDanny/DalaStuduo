@@ -91,6 +91,22 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ── Public: published CMS pages (no auth required) ──
+app.get('/api/pages/:slug', async (req, res, next) => {
+  try {
+    const { slug } = req.params;
+    const { data, error } = await adminClient
+      .from('pages')
+      .select('slug, title, content_html, created_at, updated_at')
+      .eq('slug', slug)
+      .eq('status', 'published')
+      .maybeSingle();
+    if (error) { res.status(500).json({ error: error.message }); return; }
+    if (!data) { res.status(404).json({ error: 'Page not found' }); return; }
+    res.json({ data });
+  } catch (err) { next(err); }
+});
+
 // ── Public: site config (cached for public consumption, bypasses RLS) ──
 app.get('/api/site-config', async (_req, res) => {
   const { data, error } = await adminClient

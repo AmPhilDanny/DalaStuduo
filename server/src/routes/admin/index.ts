@@ -371,6 +371,99 @@ adminRouter.get('/payouts', async (req: Request, res: Response) => {
   res.json({ data });
 });
 
+// ════════════════════════════════════════
+// CMS PAGES — CRUD
+// ════════════════════════════════════════
+
+// ── GET /admin/pages — list all pages (admin can see drafts) ──
+adminRouter.get('/pages', async (_req: Request, res: Response) => {
+  const { data, error } = await adminClient
+    .from('pages')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw new AppError(500, error.message);
+  res.json({ data });
+});
+
+// ── GET /admin/pages/:id — get single page ──
+adminRouter.get('/pages/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { data, error } = await adminClient
+    .from('pages')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error || !data) throw new AppError(404, 'Page not found');
+  res.json({ data });
+});
+
+// ── POST /admin/pages — create page ──
+adminRouter.post('/pages',
+  validate(z.object({
+    slug: z.string().min(1).max(200).regex(/^[a-z0-9-]+$/),
+    title: z.string().min(1).max(500),
+    content_html: z.string().default(''),
+    status: z.enum(['draft', 'published']).default('draft'),
+  })),
+  async (req: Request, res: Response) => {
+    const { slug, title, content_html, status } = req.body;
+    const { data, error } = await adminClient
+      .from('pages')
+      .insert({ slug, title, content_html, status })
+      .select()
+      .single();
+    if (error) {
+      if (error.code === '23505') throw new AppError(409, 'A page with this slug already exists');
+      throw new AppError(500, error.message);
+    }
+    res.json({ data });
+  }
+);
+
+// ── PATCH /admin/pages/:id — update page ──
+adminRouter.patch('/pages/:id',
+  validate(z.object({
+    slug: z.string().min(1).max(200).regex(/^[a-z0-9-]+$/).optional(),
+    title: z.string().min(1).max(500).optional(),
+    content_html: z.string().optional(),
+    status: z.enum(['draft', 'published']).optional(),
+  }).refine(data => Object.keys(data).length > 0, { message: 'No fields to update' })),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const updates: Record<string, unknown> = { ...req.body, updated_at: new Date().toISOString() };
+
+    const { data, error } = await adminClient
+      .from('pages')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) {
+      if (error.code === '23505') throw new AppError(409, 'Slug already in use');
+      throw new AppError(500, error.message);
+    }
+    if (!data) throw new AppError(404, 'Page not found');
+    res.json({ data });
+  }
+);
+
+// ── DELETE /admin/pages/:id — delete page (blocked for system pages) ──
+adminRouter.delete('/pages/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  // Check if page is a system page
+  const { data: existing } = await adminClient
+    .from('pages')
+    .select('id, is_system')
+    .eq('id', id)
+    .single();
+  if (!existing) throw new AppError(404, 'Page not found');
+  if (existing.is_system) throw new AppError(403, 'System pages cannot be deleted');
+
+  const { error } = await adminClient.from('pages').delete().eq('id', id);
+  if (error) throw new AppError(500, error.message);
+  res.json({ data: { id, deleted: true } });
+});
+
 // ── GET /admin/settings ──
 adminRouter.get('/settings', async (_req: Request, res: Response) => {
   const { data, error } = await adminClient.from('site_settings').select('*').order('key');
