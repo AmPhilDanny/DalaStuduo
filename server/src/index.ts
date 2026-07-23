@@ -20,7 +20,7 @@ import { b2bRouter } from './routes/b2b/index.js';
 import { notificationsRouter } from './routes/notifications/index.js';
 import { webhooksRouter } from './routes/webhooks/index.js';
 import { emailRouter } from './routes/email/index.js';
-import { githubRouter } from './routes/github/index.js';
+import { githubRouter, handleGithubCallback } from './routes/github/index.js';
 import { academyRouter } from './routes/academy/index.js';
 import { academyCoursesRouter } from './routes/academy/courses.js';
 import { academyCertificatesRouter } from './routes/academy/certificates.js';
@@ -103,6 +103,7 @@ app.get('/api/site-config', async (_req, res) => {
 
 // ── Public Routes (no auth required) ──
 app.use('/api/webhooks', webhooksRouter);
+app.get('/api/github/callback', handleGithubCallback);
 
 // ── Marketplace Routes (public read, authenticated write) ──
 app.use('/api/marketplace', optionalAuth, marketplaceRouter);

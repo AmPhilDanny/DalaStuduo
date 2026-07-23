@@ -4,10 +4,7 @@ import { AppError } from '../../middleware/error.js';
 
 export const githubRouter: Router = Router();
 
-const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID || '';
-const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || '';
 const ENCRYPTION_KEY = process.env.GITHUB_TOKEN_ENCRYPTION_KEY || 'default-dev-key-change-in-production';
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
 
 interface TokenResponse {
   access_token: string;
@@ -21,6 +18,44 @@ interface GitHubUser {
   avatar_url: string;
   html_url: string;
   name: string | null;
+}
+
+// ── Helpers ──
+
+/** Read GitHub OAuth credentials from site_settings (admin-configurable) with env fallback. */
+async function getGitHubOAuthConfig(): Promise<{ clientId: string; clientSecret: string }> {
+  const { data } = await adminClient
+    .from('site_settings')
+    .select('key, value')
+    .in('key', ['github_oauth_client_id', 'github_oauth_client_secret']);
+
+  const settings: Record<string, string> = {};
+  if (data) {
+    for (const row of data) {
+      settings[row.key] = row.value as string;
+    }
+  }
+
+  return {
+    clientId: settings['github_oauth_client_id'] || process.env.GITHUB_CLIENT_ID || '',
+    clientSecret: settings['github_oauth_client_secret'] || process.env.GITHUB_CLIENT_SECRET || '',
+  };
+}
+
+async function exchangeCode(code: string, clientId: string, clientSecret: string): Promise<TokenResponse> {
+  const res = await fetch('https://github.com/login/oauth/access_token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+  });
+  return res.json();
+}
+
+async function getGitHubUser(token: string): Promise<GitHubUser> {
+  const res = await fetch('https://api.github.com/user', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.json();
 }
 
 function encrypt(text: string): string {
@@ -40,30 +75,63 @@ function decrypt(encoded: string): string {
   return result;
 }
 
-async function exchangeCode(code: string): Promise<TokenResponse> {
-  const res = await fetch('https://github.com/login/oauth/access_token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      client_id: GITHUB_CLIENT_ID,
-      client_secret: GITHUB_CLIENT_SECRET,
-      code,
-    }),
-  });
-  return res.json();
+// ── Public: GitHub OAuth callback (no auth — GitHub redirects here) ──
+
+async function storeConnection(userId: string, token: string): Promise<void> {
+  const ghUser = await getGitHubUser(token);
+  const { error } = await adminClient
+    .from('github_connections')
+    .upsert({
+      user_id: userId,
+      github_id: ghUser.id,
+      github_login: ghUser.login,
+      github_avatar_url: ghUser.avatar_url,
+      github_url: ghUser.html_url,
+      access_token: encrypt(token),
+    }, { onConflict: 'user_id' });
+
+  if (error) throw new Error('Failed to store GitHub connection');
 }
 
-async function getGitHubUser(token: string): Promise<GitHubUser> {
-  const res = await fetch('https://api.github.com/user', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.json();
+export async function handleGithubCallback(req: Request, res: Response) {
+  const { code, state } = req.query;
+  const clientUrl = process.env.CLIENT_URL || 'https://novaxbridge.onrender.com';
+
+  if (!code || typeof code !== 'string') {
+    return res.redirect(`${clientUrl}/academy/playground?error=missing_code`);
+  }
+
+  const userId = typeof state === 'string' ? state : null;
+  if (!userId) {
+    return res.redirect(`${clientUrl}/academy/playground?error=missing_state`);
+  }
+
+  try {
+    const config = await getGitHubOAuthConfig();
+    if (!config.clientId || !config.clientSecret) {
+      return res.redirect(`${clientUrl}/academy/playground?error=oauth_not_configured`);
+    }
+
+    const tokenResponse = await exchangeCode(code, config.clientId, config.clientSecret);
+    if (!tokenResponse.access_token) {
+      return res.redirect(`${clientUrl}/academy/playground?error=token_exchange_failed`);
+    }
+
+    await storeConnection(userId, tokenResponse.access_token);
+
+    return res.redirect(`${clientUrl}/academy/playground?github=connected`);
+  } catch {
+    return res.redirect(`${clientUrl}/academy/playground?error=connection_failed`);
+  }
 }
+
+// ── Authenticated Routes ──
 
 // GET /github/url — return the GitHub OAuth authorization URL
 githubRouter.get('/url', async (req: Request, res: Response) => {
-  const redirectUri = `${SUPABASE_URL}/functions/v1/github-oauth`;
-  const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=repo,user&state=${req.user!.id}`;
+  const config = await getGitHubOAuthConfig();
+  const redirectUri = `${req.protocol}://${req.get('host')}/api/github/callback`;
+  const url = `https://github.com/login/oauth/authorize?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=repo,user&state=${req.user!.id}`;
   res.json({ data: { url } });
 });
 
@@ -72,7 +140,8 @@ githubRouter.post('/connect', async (req: Request, res: Response) => {
   const { code } = req.body;
   if (!code) throw new AppError(400, 'Missing code');
 
-  const tokenResponse = await exchangeCode(code);
+  const config = await getGitHubOAuthConfig();
+  const tokenResponse = await exchangeCode(code, config.clientId, config.clientSecret);
   if (!tokenResponse.access_token) {
     throw new AppError(400, 'Failed to exchange code');
   }
