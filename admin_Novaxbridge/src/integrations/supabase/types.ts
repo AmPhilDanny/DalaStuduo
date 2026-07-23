@@ -606,6 +606,39 @@ export type Database = {
           },
         ]
       }
+      pages: {
+        Row: {
+          id: string
+          slug: string
+          title: string
+          content_html: string
+          status: string
+          is_system: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          slug: string
+          title: string
+          content_html?: string
+          status?: string
+          is_system?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          slug?: string
+          title?: string
+          content_html?: string
+          status?: string
+          is_system?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           amount: number
