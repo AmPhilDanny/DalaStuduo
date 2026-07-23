@@ -51,6 +51,7 @@ import { downloadCSV } from '@/lib/export';
 import { usePermissions } from '@/hooks/usePermissions';
 import SiteSettingsTab from '@/components/admin/SiteSettingsTab';
 import UserManagementTab from '@/components/admin/UserManagementTab';
+import CmsPagesTab from '@/components/admin/CmsPagesTab';
 
 const DEFAULT_ADMIN_EMAIL = 'admin@skillbridge.africa';
 
@@ -1351,6 +1352,7 @@ export default function AdminDashboard() {
     { value: 'ai-settings', label: 'AI Settings', icon: <Key className="w-4 h-4" /> },
     { value: 'academy', label: 'Academy', icon: <GraduationCap className="w-4 h-4" /> },
     { value: 'manual-payments', label: 'Manual Payments', icon: <Banknote className="w-4 h-4" /> },
+    { value: 'cms-pages', label: 'CMS Pages', icon: <FileText className="w-4 h-4" /> },
     { value: 'site-settings', label: 'Site Settings', icon: <Settings className="w-4 h-4" /> },
     { value: 'video-calls', label: 'Video Calls', icon: <Video className="w-4 h-4" /> },
     { value: 'messages', label: 'Messages', icon: <MessageSquare className="w-4 h-4" /> },
@@ -2361,6 +2363,7 @@ export default function AdminDashboard() {
           )}
 
           {/* ═══ SITE SETTINGS ═══ */}
+          {activeTab === 'cms-pages' && <CmsPagesTab />}
           {activeTab === 'site-settings' && <SiteSettingsTab />}
 
           {/* ═══ VIDEO CALLS ═══ */}

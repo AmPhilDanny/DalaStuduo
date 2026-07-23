@@ -203,6 +203,17 @@ export const notificationsApi = {
   markRead: (id: string) => patch(`/notifications/${id}/read`),
 };
 
+// ── CMS Pages API helpers ──
+
+export const cmsApi = {
+  list: () => get<import('@/types/cms').CmsPage[]>('/admin/pages'),
+  get: (id: string) => get<import('@/types/cms').CmsPage>(`/admin/pages/${id}`),
+  create: (data: import('@/types/cms').CmsPageInput) => post<import('@/types/cms').CmsPage>('/admin/pages', data),
+  update: (id: string, data: Partial<import('@/types/cms').CmsPageInput>) => patch<import('@/types/cms').CmsPage>(`/admin/pages/${id}`, data),
+  delete: (id: string) => del(`/admin/pages/${id}`),
+  getPublished: (slug: string) => get<import('@/types/cms').CmsPage>(`/pages/${slug}`),
+};
+
 // ── AI API helpers ──
 
 export const aiApi = {

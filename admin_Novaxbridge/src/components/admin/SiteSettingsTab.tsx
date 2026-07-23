@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Save, Plus, Trash2, Upload, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, Save, Plus, Trash2, Upload, Link as LinkIcon, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4001/api';
 
@@ -325,7 +326,13 @@ export default function SiteSettingsTab() {
                 {col.links.map((link, li) => (
                   <div key={li} className="flex items-center gap-2 ml-4">
                     <Input value={link.name} onChange={(e) => updateFooterLink(ci, li, 'name', e.target.value)} placeholder="Link name" className="flex-1" />
-                    <Input value={link.href} onChange={(e) => updateFooterLink(ci, li, 'href', e.target.value)} placeholder="URL" className="flex-1" />
+                    <div className="flex-1 flex items-center gap-1">
+                      <Input value={link.href} onChange={(e) => updateFooterLink(ci, li, 'href', e.target.value)} placeholder="URL or /pages/slug" className="flex-1" />
+                      <CmsLinkButton
+                        currentHref={link.href}
+                        onSelect={(href) => updateFooterLink(ci, li, 'href', href)}
+                      />
+                    </div>
                     <Button size="icon" variant="ghost" className="text-red-500 h-8 w-8" onClick={() => removeFooterLink(ci, li)}><Trash2 className="w-3.5 h-3.5" /></Button>
                   </div>
                 ))}
@@ -394,5 +401,90 @@ export default function SiteSettingsTab() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ── CMS Page Link Picker ──
+
+interface CmsLinkButtonProps {
+  currentHref: string;
+  onSelect: (href: string) => void;
+}
+
+interface CmsPageSummary {
+  slug: string;
+  title: string;
+  status: string;
+}
+
+function CmsLinkButton({ currentHref, onSelect }: CmsLinkButtonProps) {
+  const [open, setOpen] = useState(false);
+  const [pages, setPages] = useState<CmsPageSummary[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchPages = async () => {
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`${API_BASE}/admin/pages`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setPages((json.data || []).filter((p: CmsPageSummary) => p.status === 'published'));
+      }
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  };
+
+  const handleOpen = () => {
+    setOpen(true);
+    fetchPages();
+  };
+
+  const handleSelect = (slug: string) => {
+    onSelect(`/pages/${slug}`);
+    setOpen(false);
+  };
+
+  return (
+    <>
+      <Button size="sm" variant="ghost" type="button" onClick={handleOpen} title="Link to a CMS page">
+        <LinkIcon className="w-3.5 h-3.5" />
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Link to CMS Page</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : pages.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No published pages yet. Create and publish pages in the CMS Pages section.
+              </p>
+            ) : (
+              pages.map((p) => (
+                <button
+                  key={p.slug}
+                  type="button"
+                  onClick={() => handleSelect(p.slug)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors hover:bg-muted flex items-center justify-between ${
+                    currentHref === `/pages/${p.slug}` ? 'bg-muted ring-1 ring-primary' : ''
+                  }`}
+                >
+                  <span className="font-medium">{p.title}</span>
+                  <span className="text-xs text-muted-foreground font-mono">/pages/{p.slug}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
