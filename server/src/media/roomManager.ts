@@ -162,6 +162,45 @@ class RoomManager {
     return token === room.metadata.token;
   }
 
+  /** List all active rooms with participant info (for admin monitoring) */
+  listRooms(): Array<{
+    id: string;
+    type: RoomType;
+    participantCount: number;
+    participants: Array<{ userId: string; displayName: string }>;
+    createdAt: number;
+    ageMs: number;
+    metadata: Room['metadata'];
+  }> {
+    const now = Date.now();
+    const list: Array<{
+      id: string;
+      type: RoomType;
+      participantCount: number;
+      participants: Array<{ userId: string; displayName: string }>;
+      createdAt: number;
+      ageMs: number;
+      metadata: Room['metadata'];
+    }> = [];
+
+    this.rooms.forEach((room) => {
+      list.push({
+        id: room.id,
+        type: room.type,
+        participantCount: room.participants.size,
+        participants: Array.from(room.participants.entries()).map(([userId, p]) => ({
+          userId,
+          displayName: p.displayName,
+        })),
+        createdAt: room.createdAt,
+        ageMs: now - room.createdAt,
+        metadata: room.metadata,
+      });
+    });
+
+    return list.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
   /** Cleanup stale rooms (call periodically) */
   cleanupStaleRooms(maxAgeMs: number = 30 * 60 * 1000): number {
     const now = Date.now();

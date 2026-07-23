@@ -4,6 +4,7 @@ import { adminClient } from '../../lib/supabase-admin.js';
 import { requireAdmin } from '../../middleware/auth.js';
 import { AppError } from '../../middleware/error.js';
 import { notificationQueue } from '../../jobs/notificationWorker.js';
+import { roomManager } from '../../media/roomManager.js';
 
 // ── Types ──
 
@@ -225,6 +226,26 @@ videoCallRouter.post('/admin/rooms/:roomId/end', (req: Request, res: Response) =
     forceEndRoom(roomId, (videoCallRouter as any).__io, reason);
   }
   res.json({ data: { id: roomId, status: 'ended', reason } });
+});
+
+/**
+ * GET /video-call/admin/sfu-rooms — list all active Mediasoup rooms
+ * Shows rooms from the SFU (mediasoup) system, separate from P2P signaling rooms.
+ */
+videoCallRouter.get('/admin/sfu-rooms', (_req: Request, res: Response) => {
+  const rooms = roomManager.listRooms();
+  res.json({ data: rooms, count: rooms.length });
+});
+
+/**
+ * POST /video-call/admin/sfu-rooms/:roomId/close — force-close a Mediasoup room
+ */
+videoCallRouter.post('/admin/sfu-rooms/:roomId/close', (req: Request, res: Response) => {
+  const { roomId } = req.params;
+  const room = roomManager.getRoom(roomId);
+  if (!room) throw new AppError(404, 'Mediasoup room not found');
+  roomManager.closeRoom(roomId);
+  res.json({ data: { id: roomId, status: 'closed' } });
 });
 
 // ── Socket.IO Signaling Setup ──
