@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useWebRTC } from "@/components/video-call/useWebRTC";
+import { useMediasoupRoom } from "@/components/video-call/useMediasoupRoom";
 import { VideoPlayer } from "@/components/video-call/VideoPlayer";
 import { MeetingControls } from "@/components/video-call/MeetingControls";
 import { ConnectionStatus } from "@/components/video-call/ConnectionStatus";
@@ -15,6 +15,8 @@ export default function VideoRoom() {
   const [displayName, setDisplayName] = useState((location.state as any)?.displayName || "");
   const [showLobby, setShowLobby] = useState(!((location.state as any)?.displayName));
 
+  const roomType = (location.state as any)?.roomType || "OPEN";
+
   const {
     localStream,
     remotePeers,
@@ -26,7 +28,7 @@ export default function VideoRoom() {
     isMicOn,
     isCameraOn,
     isScreenSharing,
-  } = useWebRTC(roomId || "", displayName);
+  } = useMediasoupRoom(roomId || "", displayName, roomType as "P2P" | "GROUP" | "OPEN");
 
   const handleEndCall = () => {
     endCall();

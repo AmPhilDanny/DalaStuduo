@@ -26,6 +26,10 @@ import { academyCoursesRouter } from './routes/academy/courses.js';
 import { academyCertificatesRouter } from './routes/academy/certificates.js';
 import { academyPlaygroundRouter } from './routes/academy/playground.js';
 import { setupVideoCallSignaling, videoCallRouter } from './routes/video-call/index.js';
+import { initMediasoupWorkers, closeMediasoupWorkers } from './media/mediasoupManager.js';
+import { setupCallHandlers } from './sockets/callHandler.js';
+import { pushSubscriptionsRouter } from './routes/push-subscriptions/index.js';
+import { startNotificationWorker } from './jobs/notificationWorker.js';
 
 const logger = pino({ name: 'skillbridge-server' });
 const app: Express = express();
@@ -126,6 +130,9 @@ app.use('/api/academy', requireAuth, academyCoursesRouter);
 app.use('/api/academy', requireAuth, academyCertificatesRouter);
 app.use('/api/academy/playground', requireAuth, academyPlaygroundRouter);
 
+// ── Push Subscription Routes ──
+app.use('/api/push-subscriptions', requireAuth, pushSubscriptionsRouter);
+
 // ── Admin Routes (auth + admin role) ──
 app.use('/api/admin', requireAuth, adminRouter);
 
@@ -158,10 +165,38 @@ const io = new Server(httpServer, {
 });
 
 setupVideoCallSignaling(io);
+setupCallHandlers(io);
 
-// ── Start Server ──
-httpServer.listen(PORT, () => {
-  logger.info(`SkillBridge API server running on port ${PORT}`);
-});
+// ── Start Server (after mediasoup init) ──
+async function start(): Promise<void> {
+  try {
+    await initMediasoupWorkers();
+    logger.info('Mediasoup workers initialized');
+
+    // Start BullMQ notification worker
+    startNotificationWorker();
+    logger.info('Notification worker started');
+
+    httpServer.listen(PORT, () => {
+      logger.info(`SkillBridge API server running on port ${PORT}`);
+    });
+  } catch (err) {
+    logger.error({ err }, 'Failed to initialize server');
+    process.exit(1);
+  }
+}
+
+start();
+
+// ── Graceful Shutdown ──
+async function shutdown(signal: string): Promise<void> {
+  logger.info({ signal }, 'Shutting down');
+  await closeMediasoupWorkers();
+  httpServer.close();
+  process.exit(0);
+}
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 export default app;

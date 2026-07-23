@@ -3,6 +3,7 @@ import type { Server, Socket } from 'socket.io';
 import { adminClient } from '../../lib/supabase-admin.js';
 import { requireAdmin } from '../../middleware/auth.js';
 import { AppError } from '../../middleware/error.js';
+import { notificationQueue } from '../../jobs/notificationWorker.js';
 
 // ── Types ──
 
@@ -355,6 +356,23 @@ export function setupVideoCallSignaling(
         } catch {
           // Notification creation is best-effort
         }
+
+        // Enqueue push notification for offline callee
+        try {
+          await notificationQueue.add('push:call', {
+            type: 'push:call',
+            calleeUserId: to,
+            callerName: callerInfo.displayName,
+            roomId,
+            roomType: 'P2P',
+          }, {
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 5000 },
+          });
+        } catch {
+          // Push notification delivery is best-effort
+        }
+
         socket.emit('call:unavailable', { roomId } as any);
       }
     });

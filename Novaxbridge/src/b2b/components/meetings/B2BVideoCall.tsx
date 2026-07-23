@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Loader2 } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Loader2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { useMediasoupCall } from '../../hooks/useMediasoupCall';
+import type { RemoteTrackEvent, Participant } from '@/lib/mediasoup-client';
 
 interface B2BVideoCallProps {
   open: boolean;
@@ -11,177 +14,171 @@ interface B2BVideoCallProps {
   meetingTitle?: string;
 }
 
-declare global {
-  interface Window {
-    JitsiMeetExternalAPI?: new (domain: string, options: Record<string, unknown>) => {
-      executeCommand: (cmd: string, ...args: unknown[]) => void;
-      addListener: (event: string, handler: (...args: unknown[]) => void) => void;
-      dispose: () => void;
-    };
-  }
-}
-
 export default function B2BVideoCall({ open, onOpenChange, roomName, userName, meetingTitle }: B2BVideoCallProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const apiRef = useRef<{ executeCommand: (cmd: string, ...args: unknown[]) => void; dispose: () => void }>(null);
-
-  const [scriptLoaded, setScriptLoaded] = useState(false);
-  const [scriptError, setScriptError] = useState(false);
+  const [userId, setUserId] = useState<string>('');
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVideoMuted, setIsVideoMuted] = useState(false);
-  const [participantCount, setParticipantCount] = useState(0);
 
+  // Grab current user ID on mount
   useEffect(() => {
-    if (!open) return;
+    supabase.auth.getSession().then(({ data }) => {
+      setUserId(data.session?.user?.id || '');
+    });
+  }, []);
 
-    const existing = document.querySelector<HTMLScriptElement>('script[src*="external_api.js"]');
-    if (existing) {
-      if (typeof window.JitsiMeetExternalAPI !== 'undefined') {
-        setScriptLoaded(true);
-      }
-      return;
+  const callOptions = open && userId
+    ? { roomId: roomName, roomType: 'GROUP' as const, userId, displayName: userName }
+    : null;
+
+  const {
+    connected,
+    participants,
+    localStream,
+    remoteStreams,
+    error,
+    leaveCall,
+    toggleMute,
+  } = useMediasoupCall(callOptions);
+
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
+
+  // Attach local stream
+  useEffect(() => {
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = localStream;
     }
+  }, [localStream]);
 
-    setScriptLoaded(false);
-    setScriptError(false);
-
-    const script = document.createElement('script');
-    script.src = 'https://meet.jit.si/external_api.js';
-    script.async = true;
-    script.onload = () => setScriptLoaded(true);
-    script.onerror = () => setScriptError(true);
-    document.head.appendChild(script);
-
-    return () => {
-      if (!existing) {
-        script.remove();
-      }
-    };
-  }, [open]);
-
+  // Attach remote streams
   useEffect(() => {
-    if (!open || !scriptLoaded || !containerRef.current || !window.JitsiMeetExternalAPI) return;
-
-    setParticipantCount(0);
-    setIsAudioMuted(false);
-    setIsVideoMuted(false);
-
-    const domain = 'meet.jit.si';
-    const options = {
-      roomName,
-      parentNode: containerRef.current,
-      userInfo: { displayName: userName },
-      interfaceConfigOverwrite: {
-        TOOLBAR_ALWAYS_VISIBLE: false,
-        SHOW_JITSI_WATERMARK: false,
-        SHOW_WATERMARK_FOR_GUESTS: false,
-        DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
-        FILM_STRIP_MAX_HEIGHT: 0,
-        VERTICAL_FILMSTRIP: false,
-        SHOW_BRAND_WATERMARK: false,
-        SHOW_POWERED_BY: false,
-        HIDE_INVITE_MORE_HEADER: true,
-        DISPLAY_WELCOME_FOOTER: false,
-        DISPLAY_WELCOME_PAGE_CONTENT: false,
-        HIDE_HELP_BUTTON: true,
-        HIDE_KICK_BUTTON_FOR_GUESTS: true,
-        HIDE_LOCAL_URL: true,
-        HIDE_LOGO: true,
-        HIDE_ROOM_URL: true,
-      },
-      configOverwrite: {
-        prejoinPageEnabled: false,
-        disableTileView: true,
-        disableInviteFunctions: true,
-        doNotStoreRoom: true,
-        hideConferenceSubject: true,
-        toolbarButtons: [],
-        disableDeepLinking: true,
-      },
-    };
-
-    const api = new window.JitsiMeetExternalAPI(domain, options);
-    apiRef.current = api;
-
-    api.addListener('videoConferenceJoined', () => {
-      setParticipantCount(1);
+    remoteStreams.forEach((event, consumerId) => {
+      const el = remoteVideoRefs.current.get(consumerId);
+      if (el) el.srcObject = new MediaStream([event.track]);
     });
+  }, [remoteStreams]);
 
-    api.addListener('participantJoined', () => {
-      setParticipantCount((c) => c + 1);
-    });
+  const handleToggleAudio = useCallback(async () => {
+    const track = localStream?.getAudioTracks()[0];
+    if (track) {
+      track.enabled = !track.enabled;
+      setIsAudioMuted(!track.enabled);
+    }
+  }, [localStream]);
 
-    api.addListener('participantLeft', () => {
-      setParticipantCount((c) => Math.max(0, c - 1));
-    });
+  const handleToggleVideo = useCallback(async () => {
+    const track = localStream?.getVideoTracks()[0];
+    if (track) {
+      track.enabled = !track.enabled;
+      setIsVideoMuted(!track.enabled);
+    }
+  }, [localStream]);
 
-    api.addListener('audioMuteStatusChanged', ({ muted }: { muted: boolean }) => {
-      setIsAudioMuted(muted);
-    });
-
-    api.addListener('videoMuteStatusChanged', ({ muted }: { muted: boolean }) => {
-      setIsVideoMuted(muted);
-    });
-
-    return () => {
-      api.dispose();
-      apiRef.current = undefined;
-    };
-  }, [open, scriptLoaded, roomName, userName]);
-
-  const toggleAudio = useCallback(() => {
-    apiRef.current?.executeCommand('toggleAudio');
-  }, []);
-
-  const toggleVideo = useCallback(() => {
-    apiRef.current?.executeCommand('toggleVideo');
-  }, []);
-
-  const hangup = useCallback(() => {
-    apiRef.current?.executeCommand('hangup');
-    apiRef.current?.dispose();
-    apiRef.current = undefined;
+  const handleHangup = useCallback(() => {
+    leaveCall();
     onOpenChange(false);
-  }, [onOpenChange]);
+  }, [leaveCall, onOpenChange]);
+
+  const getAvatarLetter = (name: string) => name.charAt(0).toUpperCase();
 
   return (
     <Dialog open={open} onOpenChange={(o) => {
       if (!o) {
-        apiRef.current?.dispose();
-        apiRef.current = undefined;
+        leaveCall();
       }
       onOpenChange(o);
     }}>
       <DialogContent className="sm:max-w-[90vw] md:max-w-[800px] h-[90vh] max-h-[700px] p-0 gap-0 overflow-hidden">
         <div className="relative w-full h-full flex flex-col bg-black">
-          <div className="flex-1 relative min-h-0">
-            {scriptError ? (
-              <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm">
-                Failed to load video. Please check your connection.
+          {/* Connection status banner */}
+          {!connected && !error && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80">
+              <div className="text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-white/60 mx-auto mb-3" />
+                <p className="text-white/60 text-sm">Connecting to call...</p>
               </div>
-            ) : !scriptLoaded ? (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-white/60" />
+            </div>
+          )}
+
+          {error && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80">
+              <div className="text-center max-w-sm px-4">
+                <p className="text-red-400 text-sm mb-2">Connection failed</p>
+                <p className="text-white/50 text-xs mb-4">{error}</p>
+                <Button size="sm" variant="outline" onClick={handleHangup} className="text-white border-white/20">
+                  Close
+                </Button>
               </div>
-            ) : (
-              <>
-                <div ref={containerRef} className="w-full h-full [&_iframe]:w-full [&_iframe]:h-full" />
-                {participantCount <= 1 && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="text-white/50 text-sm bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm">
-                      {meetingTitle ? `${meetingTitle} — ` : ''}Waiting for others to join...
+            </div>
+          )}
+
+          {/* Video grid */}
+          <div className="flex-1 relative min-h-0 p-2">
+            <div className="grid gap-2 h-full" style={{
+              gridTemplateColumns: `repeat(${Math.min(remoteStreams.size + 1, 3)}, 1fr)`,
+            }}>
+              {/* Local video */}
+              <div className="relative bg-zinc-900 rounded-lg overflow-hidden aspect-video">
+                {localStream ? (
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover scale-x-[-1]"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-full bg-zinc-700 flex items-center justify-center">
+                      <span className="text-2xl font-semibold text-zinc-400">{getAvatarLetter(userName)}</span>
                     </div>
                   </div>
                 )}
-              </>
+                <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between">
+                  <span className="text-xs text-white/80 bg-black/50 px-2 py-0.5 rounded truncate max-w-[70%]">
+                    {userName} (You)
+                  </span>
+                  {isAudioMuted && <MicOff className="w-3 h-3 text-red-400" />}
+                </div>
+              </div>
+
+              {/* Remote videos */}
+              {Array.from(remoteStreams.entries()).map(([consumerId, event]) => (
+                <div key={consumerId} className="relative bg-zinc-900 rounded-lg overflow-hidden aspect-video">
+                  <video
+                    ref={(el) => {
+                      if (el) remoteVideoRefs.current.set(consumerId, el);
+                    }}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-1 left-1 right-1">
+                    <span className="text-xs text-white/80 bg-black/50 px-2 py-0.5 rounded truncate block max-w-[90%]">
+                      {event.userId}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Waiting overlay when alone */}
+            {connected && remoteStreams.size === 0 && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
+                <div className="text-white/50 text-xs bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm flex items-center gap-2">
+                  <Users className="w-3 h-3" />
+                  {meetingTitle ? `${meetingTitle} — ` : ''}Waiting for others to join...
+                </div>
+              </div>
             )}
           </div>
 
+          {/* Controls */}
           <div className="flex items-center justify-center gap-4 p-4 bg-black/80">
             <Button
               variant="ghost"
               size="icon"
-              onClick={toggleAudio}
+              onClick={handleToggleAudio}
               className={`rounded-full w-12 h-12 ${
                 isAudioMuted
                   ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
@@ -193,7 +190,7 @@ export default function B2BVideoCall({ open, onOpenChange, roomName, userName, m
             <Button
               variant="ghost"
               size="icon"
-              onClick={toggleVideo}
+              onClick={handleToggleVideo}
               className={`rounded-full w-12 h-12 ${
                 isVideoMuted
                   ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
@@ -205,7 +202,7 @@ export default function B2BVideoCall({ open, onOpenChange, roomName, userName, m
             <Button
               variant="ghost"
               size="icon"
-              onClick={hangup}
+              onClick={handleHangup}
               className="rounded-full w-12 h-12 bg-red-500 text-white hover:bg-red-600"
             >
               <PhoneOff className="w-5 h-5" />

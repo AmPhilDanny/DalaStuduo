@@ -7,6 +7,8 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { SocketProvider } from "@/hooks/useSocket";
 import { CallProvider } from "@/hooks/useCall";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useAuth } from "@/hooks/useAuth";
+import { initPushNotifications } from "@/lib/push-subscription";
 import IncomingCallDialog from "@/components/video-call/IncomingCallDialog";
 import OutgoingCallStatus from "@/components/video-call/OutgoingCallStatus";
 import Home from "@/pages/Home";
@@ -87,6 +89,16 @@ function MetaUpdater() {
   return null;
 }
 
+function PushInit() {
+  const { user } = useAuth();
+  useEffect(() => {
+    if (user) {
+      initPushNotifications();
+    }
+  }, [user]);
+  return null;
+}
+
 function setMeta(name: string, content: string) {
   if (!content) return;
   let el = document.querySelector(`meta[name="${name}"], meta[property="${name}"]`) as HTMLMetaElement | null;
@@ -109,6 +121,7 @@ function App() {
         <SocketProvider>
           <CallProvider>
             <MetaUpdater />
+            <PushInit />
             <div className="min-h-screen bg-background text-foreground selection:bg-secondary/30 selection:text-primary">
               <Navbar />
               <main>
