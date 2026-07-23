@@ -4,7 +4,7 @@ services:
     name: skillbridge-api
     runtime: node
     rootDir: server
-    buildCommand: npm install --ignore-scripts
+    buildCommand: npm install
     startCommand: npx tsx src/index.ts
     envVars:
       - key: NODE_ENV
