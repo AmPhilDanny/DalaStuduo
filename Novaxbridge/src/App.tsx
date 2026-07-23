@@ -43,6 +43,7 @@ import MyListings from "@/pages/MyListings";
 import OrderDetail from "@/pages/OrderDetail";
 import Messages from "@/pages/Messages";
 import VideoRoom from "@/pages/VideoRoom";
+import CmsPage from "@/pages/CmsPage";
 
 import Disputes from "@/pages/Disputes";
 import DisputeDetail from "@/pages/DisputeDetail";
@@ -177,6 +178,7 @@ function App() {
                   <Route path="/video-call/:roomId" element={<VideoRoom />} />
                   <Route path="/disputes" element={<Disputes />} />
                   <Route path="/disputes/:id" element={<DisputeDetail />} />
+                  <Route path="/pages/:slug" element={<CmsPage />} />
                   <Route path="/admin" element={<AdminRedirect />} />
                   <Route path="/b2b/setup" element={<OrgProvider><OrgSetup /></OrgProvider>} />
                   <Route path="/b2b/invite/accept" element={<InviteAccept />} />
